@@ -1,4 +1,5 @@
 import type { AppApi, ReceiptDraftDto, SnapshotDto } from "./api";
+import { renderBackup } from "./backup";
 import { renderInventoryList } from "./inventory-list";
 import { renderKitchen } from "./kitchen";
 import { renderMeals } from "./meals";
@@ -24,6 +25,7 @@ export async function mountApp(root: HTMLElement, api: AppApi): Promise<void> {
         <div id="spending-view"></div><div class="budget-grid"><div id="week-view"></div><div id="month-view"></div></div>
         <h3>Receipt item categories</h3><p class="hint">Category edits are recorded. Moving a used food item to non-food is blocked to protect inventory history.</p><div id="category-view"></div>
       </section>
+      <section class="panel"><p class="eyebrow">LOCAL RECOVERY</p><h2>Backup and restore</h2><div id="backup-view"></div></section>
     </main>`;
   const textarea = root.querySelector<HTMLTextAreaElement>("textarea[name=receipt-text]")!;
   const reviewPanel = root.querySelector<HTMLElement>("#review-panel")!;
@@ -35,6 +37,7 @@ export async function mountApp(root: HTMLElement, api: AppApi): Promise<void> {
   const weekRoot = root.querySelector<HTMLElement>("#week-view")!;
   const monthRoot = root.querySelector<HTMLElement>("#month-view")!;
   const categoriesRoot = root.querySelector<HTMLElement>("#category-view")!;
+  const backupRoot = root.querySelector<HTMLElement>("#backup-view")!;
   const viewDate = root.querySelector<HTMLInputElement>('input[name="view-date"]')!;
   const weekStart = root.querySelector<HTMLSelectElement>('select[name="week-start"]')!;
   const current = new Date();
@@ -120,6 +123,7 @@ export async function mountApp(root: HTMLElement, api: AppApi): Promise<void> {
     }
   };
   paint();
+  renderBackup(backupRoot, api, async (restored) => { snapshot = restored; paint(); await loadProjections(); });
   await loadProjections();
   viewDate.addEventListener("change", loadProjections);
   weekStart.addEventListener("change", loadProjections);

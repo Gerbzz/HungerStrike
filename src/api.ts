@@ -76,6 +76,13 @@ export type BudgetDto = {
   refunds_cents: number; reconciliation_cents: number;
 };
 
+export type ImportPreviewDto = {
+  incoming_receipts: number; existing_receipts: number; duplicate_receipts: number;
+  conflicting_identifiers: number; incoming_lots: number; replace_will_create_restore_point: boolean;
+};
+export type BackupMode = "replace" | "reconcile";
+export type BackupApi = Pick<AppApi, "exportBackupFile" | "previewBackup" | "applyBackup" | "undoLastReplace">;
+
 export type InventoryActionDto =
   | { kind: "move"; lot_id: string; zone: string }
   | { kind: "consume" | "discard"; lot_id: string; quantity: string };
@@ -90,6 +97,10 @@ export interface AppApi {
   budget(referenceDate: string, period: PeriodDto, weekStart: number): Promise<BudgetDto>;
   saveBudget(period: PeriodDto, cents: number | null): Promise<void>;
   editCategory(lineId: string, category: string): Promise<SnapshotDto>;
+  exportBackupFile(): Promise<string | null>;
+  previewBackup(bytes: number[]): Promise<ImportPreviewDto>;
+  applyBackup(bytes: number[], mode: BackupMode): Promise<{ outcome: "imported" | "duplicate"; snapshot: SnapshotDto }>;
+  undoLastReplace(): Promise<SnapshotDto>;
 }
 
 export const tauriApi: AppApi = {
@@ -102,4 +113,8 @@ export const tauriApi: AppApi = {
   ,budget: (referenceDate, period, weekStart) => invoke("get_budget", { referenceDate, period, weekStart })
   ,saveBudget: (period, cents) => invoke("save_budget", { period, cents })
   ,editCategory: (lineId, category) => invoke("edit_category", { lineId, category })
+  ,exportBackupFile: () => invoke("export_backup_file")
+  ,previewBackup: (bytes) => invoke("preview_backup", { bytes })
+  ,applyBackup: (bytes, mode) => invoke("apply_backup", { bytes, mode })
+  ,undoLastReplace: () => invoke("undo_last_replace")
 };

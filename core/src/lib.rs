@@ -1,3 +1,4 @@
+mod backup;
 mod budget;
 mod inventory;
 mod ledger;
@@ -6,6 +7,10 @@ mod receipt;
 mod recipes;
 mod store;
 
+pub use backup::{
+    apply_import, export_backup, preview_import, restore_last_import, ApplyOutcome, ImportPreview,
+    PortableBackup, ReplaceOrReconcile,
+};
 pub use budget::{budget_view, set_budget, BudgetView, Period};
 pub use inventory::record_inventory_action;
 pub use ledger::{confirm_receipt, recategorize_item, snapshot};

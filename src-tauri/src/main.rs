@@ -8,6 +8,7 @@ use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let directory = app.path().app_local_data_dir()?;
             fs::create_dir_all(&directory)?;
@@ -24,7 +25,11 @@ fn main() {
             commands::get_meals,
             commands::get_budget,
             commands::save_budget,
-            commands::edit_category
+            commands::edit_category,
+            commands::export_backup_file,
+            commands::preview_backup,
+            commands::apply_backup,
+            commands::undo_last_replace
         ])
         .run(tauri::generate_context!())
         .expect("HungerStrike could not start");

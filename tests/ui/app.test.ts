@@ -18,7 +18,11 @@ const projectionApi = {
     gross_items_cents: 0, discounts_cents: 0, refunds_cents: 0, reconciliation_cents: 0
   }),
   saveBudget: async () => {},
-  editCategory: async () => blank
+  editCategory: async () => blank,
+  exportBackupFile: async () => null,
+  previewBackup: async () => ({ incoming_receipts: 0, existing_receipts: 0, duplicate_receipts: 0, conflicting_identifiers: 0, incoming_lots: 0, replace_will_create_restore_point: true }),
+  applyBackup: async () => ({ outcome: "duplicate" as const, snapshot: blank }),
+  undoLastReplace: async () => blank
 };
 const draft: ReceiptDraftDto = {
   id: "R001", purchase_date: "2026-10-10", source_sha256: "abc",

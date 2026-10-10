@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use rusqlite::{params, Connection, OpenFlags};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 use crate::model::{CategoryEdit, LotView, ReceiptDraft};
@@ -69,6 +69,10 @@ impl Store {
                  CREATE TABLE IF NOT EXISTS app_state (
                    id INTEGER PRIMARY KEY CHECK (id = 1),
                    payload TEXT NOT NULL
+                 );
+                 CREATE TABLE IF NOT EXISTS restore_points (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   backup_json TEXT NOT NULL
                  );",
             )
             .map_err(|e| e.to_string())?;
@@ -107,6 +111,54 @@ impl Store {
                 "UPDATE app_state SET payload = ?1 WHERE id = 1",
                 params![raw],
             )
+            .map_err(|e| e.to_string())?;
+        transaction.commit().map_err(|e| e.to_string())
+    }
+
+    pub(crate) fn replace_with_restore(
+        &mut self,
+        state: &State,
+        backup_json: &str,
+    ) -> Result<(), String> {
+        let raw = serde_json::to_string(state).map_err(|e| e.to_string())?;
+        let transaction = self.connection.transaction().map_err(|e| e.to_string())?;
+        transaction
+            .execute(
+                "INSERT INTO restore_points (backup_json) VALUES (?1)",
+                params![backup_json],
+            )
+            .map_err(|e| e.to_string())?;
+        transaction
+            .execute(
+                "UPDATE app_state SET payload = ?1 WHERE id = 1",
+                params![raw],
+            )
+            .map_err(|e| e.to_string())?;
+        transaction.commit().map_err(|e| e.to_string())
+    }
+
+    pub(crate) fn latest_restore_point(&self) -> Result<Option<(i64, String)>, String> {
+        self.connection
+            .query_row(
+                "SELECT id, backup_json FROM restore_points ORDER BY id DESC LIMIT 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|e| e.to_string())
+    }
+
+    pub(crate) fn apply_restore_point(&mut self, id: i64, state: &State) -> Result<(), String> {
+        let raw = serde_json::to_string(state).map_err(|e| e.to_string())?;
+        let transaction = self.connection.transaction().map_err(|e| e.to_string())?;
+        transaction
+            .execute(
+                "UPDATE app_state SET payload = ?1 WHERE id = 1",
+                params![raw],
+            )
+            .map_err(|e| e.to_string())?;
+        transaction
+            .execute("DELETE FROM restore_points WHERE id = ?1", params![id])
             .map_err(|e| e.to_string())?;
         transaction.commit().map_err(|e| e.to_string())
     }
