@@ -82,4 +82,18 @@ describe("local receipt workflow", () => {
     expect(root.textContent).toContain("SYNTHETIC OCR TEXT");
     expect(confirm).not.toHaveBeenCalled();
   });
+
+  it("filters the accessible inventory list by search text", async () => {
+    const root = document.createElement("div");
+    const stocked: SnapshotDto = { ...blank, lots: [
+      { id: "1", name: "large eggs", quantity: "6", unit: "egg", zone: "fridge", remaining_cost_cents: 174, source_receipt_id: "R1", category: "food.dairy", expiry_date: null, purchase_date: "2026-10-03" },
+      { id: "2", name: "pasta", quantity: "2", unit: "each", zone: "pantry", remaining_cost_cents: 179, source_receipt_id: "R1", category: "food.pantry", expiry_date: null, purchase_date: "2026-10-03" }
+    ] };
+    await mountApp(root, { ...projectionApi, importText: vi.fn(), scanPhoto: vi.fn(), confirm: vi.fn(), getSnapshot: async () => stocked, action: vi.fn() });
+    const search = root.querySelector<HTMLInputElement>('input[name="inventory-search"]')!;
+    search.value = "egg";
+    search.dispatchEvent(new Event("input"));
+    expect(root.querySelectorAll("#inventory-view li")).toHaveLength(1);
+    expect(root.querySelector("#inventory-view")!.textContent).toContain("large eggs");
+  });
 });

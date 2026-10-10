@@ -18,7 +18,7 @@ export async function mountApp(root: HTMLElement, api: AppApi): Promise<void> {
         <div id="photo-preview"></div><p class="hint">Photo text is a draft. Correct OCR errors before confirming. If offline OCR is unavailable, enter receipt text above.</p></section>
       <p id="app-status" class="status" role="status" aria-live="polite"></p>
       <section id="review-panel" class="panel" hidden></section>
-      <section class="panel"><div class="section-heading"><div><p class="eyebrow">INVENTORY</p><h2>Kitchen</h2></div><span id="receipt-count"></span></div><div id="kitchen-view"></div><div id="inventory-view"></div></section>
+      <section class="panel"><div class="section-heading"><div><p class="eyebrow">INVENTORY</p><h2>Kitchen</h2></div><span id="receipt-count"></span></div><div id="kitchen-view"></div><label>Search inventory <input type="search" name="inventory-search" placeholder="Item name"></label><div id="inventory-view"></div></section>
       <section class="panel"><p class="eyebrow">FROM CONFIRMED STOCK</p><h2>Meal ideas</h2><div id="meals-view"></div></section>
       <section class="panel"><p class="eyebrow">CONFIRMED RECEIPTS</p><h2>Spending</h2>
         <div class="budget-controls"><label>View date <input type="date" name="view-date"></label><label>Week starts <select name="week-start"><option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option><option value="3">Thursday</option><option value="4">Friday</option><option value="5">Saturday</option><option value="6">Sunday</option></select></label></div>
@@ -32,6 +32,7 @@ export async function mountApp(root: HTMLElement, api: AppApi): Promise<void> {
   const status = root.querySelector<HTMLElement>("#app-status")!;
   const listRoot = root.querySelector<HTMLElement>("#inventory-view")!;
   const kitchenRoot = root.querySelector<HTMLElement>("#kitchen-view")!;
+  const inventorySearch = root.querySelector<HTMLInputElement>('input[name="inventory-search"]')!;
   const spendingRoot = root.querySelector<HTMLElement>("#spending-view")!;
   const mealsRoot = root.querySelector<HTMLElement>("#meals-view")!;
   const weekRoot = root.querySelector<HTMLElement>("#week-view")!;
@@ -65,7 +66,8 @@ export async function mountApp(root: HTMLElement, api: AppApi): Promise<void> {
   };
   const paint = () => {
     root.querySelector<HTMLElement>("#receipt-count")!.textContent = `${snapshot.receipt_count} confirmed receipt${snapshot.receipt_count === 1 ? "" : "s"}`;
-    const visible = snapshot.lots.filter((lot) => Number(lot.quantity) > 0 && (!activeZone || lot.zone === activeZone));
+    const query = inventorySearch.value.trim().toLocaleLowerCase();
+    const visible = snapshot.lots.filter((lot) => Number(lot.quantity) > 0 && (!activeZone || lot.zone === activeZone) && lot.name.toLocaleLowerCase().includes(query));
     renderKitchen(kitchenRoot, snapshot.lots, (zone) => { activeZone = activeZone === zone ? null : zone; paint(); }, typeof WebGLRenderingContext !== "undefined");
     const filter = document.createElement("p");
     filter.textContent = activeZone ? `Showing ${activeZone}. ` : "Showing all zones. ";
@@ -123,6 +125,7 @@ export async function mountApp(root: HTMLElement, api: AppApi): Promise<void> {
     }
   };
   paint();
+  inventorySearch.addEventListener("input", paint);
   renderBackup(backupRoot, api, async (restored) => { snapshot = restored; paint(); await loadProjections(); });
   await loadProjections();
   viewDate.addEventListener("change", loadProjections);

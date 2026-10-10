@@ -109,3 +109,20 @@ fn failed_replace_write_preserves_the_existing_database() {
     let reopened = Store::open(&path).unwrap();
     assert_eq!(snapshot(&reopened).unwrap().cash_flow_cents, 1769);
 }
+
+#[test]
+fn undo_refuses_to_discard_changes_made_after_replacement() {
+    let mut target = seed("R001-purchase.txt");
+    let second = export_backup(&seed("R002-refund.txt"))
+        .unwrap()
+        .to_bytes()
+        .unwrap();
+    apply_import(&mut target, &second, ReplaceOrReconcile::Replace).unwrap();
+    confirm_receipt(
+        &mut target,
+        review(parse_text(&fixture("R001-purchase.txt"))).unwrap(),
+    )
+    .unwrap();
+    assert!(restore_last_import(&mut target).is_err());
+    assert_eq!(snapshot(&target).unwrap().cash_flow_cents, 2725);
+}

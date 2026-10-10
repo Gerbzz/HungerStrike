@@ -21,11 +21,11 @@ export function renderKitchen(
   root.replaceChildren();
   const fallback = () => {
     const note = document.createElement("p");
-    note.textContent = "3D view unavailable. Use this inventory list instead.";
+    note.textContent = "3D view unavailable. Use the inventory list below for actions.";
     root.append(note);
     const list = document.createElement("div");
     root.append(list);
-    renderInventoryList(list, lots, (_id, zone) => onZone(zone));
+    renderInventoryList(list, lots);
     return "list" as const;
   };
   if (!webglAvailable) return fallback();

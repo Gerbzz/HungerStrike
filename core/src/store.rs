@@ -2,6 +2,7 @@ use std::path::Path;
 
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::model::{CategoryEdit, LotView, ReceiptDraft};
 
@@ -24,6 +25,12 @@ pub(crate) struct State {
     pub monthly_budget_cents: Option<i64>,
     #[serde(default)]
     pub category_edits: Vec<CategoryEdit>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct RestorePoint {
+    previous_backup_json: String,
+    applied_state_sha256: String,
 }
 
 impl Default for State {
@@ -121,11 +128,16 @@ impl Store {
         backup_json: &str,
     ) -> Result<(), String> {
         let raw = serde_json::to_string(state).map_err(|e| e.to_string())?;
+        let point = RestorePoint {
+            previous_backup_json: backup_json.into(),
+            applied_state_sha256: format!("{:x}", Sha256::digest(raw.as_bytes())),
+        };
+        let point_json = serde_json::to_string(&point).map_err(|e| e.to_string())?;
         let transaction = self.connection.transaction().map_err(|e| e.to_string())?;
         transaction
             .execute(
                 "INSERT INTO restore_points (backup_json) VALUES (?1)",
-                params![backup_json],
+                params![point_json],
             )
             .map_err(|e| e.to_string())?;
         transaction
@@ -137,20 +149,41 @@ impl Store {
         transaction.commit().map_err(|e| e.to_string())
     }
 
-    pub(crate) fn latest_restore_point(&self) -> Result<Option<(i64, String)>, String> {
-        self.connection
+    pub(crate) fn latest_restore_point(&self) -> Result<Option<(i64, String, String)>, String> {
+        let row: Option<(i64, String)> = self
+            .connection
             .query_row(
                 "SELECT id, backup_json FROM restore_points ORDER BY id DESC LIMIT 1",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+        row.map(|(id, raw)| {
+            let point: RestorePoint = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+            Ok((id, point.previous_backup_json, point.applied_state_sha256))
+        })
+        .transpose()
     }
 
-    pub(crate) fn apply_restore_point(&mut self, id: i64, state: &State) -> Result<(), String> {
+    pub(crate) fn apply_restore_point(
+        &mut self,
+        id: i64,
+        state: &State,
+        expected_current_sha256: &str,
+    ) -> Result<(), String> {
         let raw = serde_json::to_string(state).map_err(|e| e.to_string())?;
         let transaction = self.connection.transaction().map_err(|e| e.to_string())?;
+        let current: String = transaction
+            .query_row("SELECT payload FROM app_state WHERE id = 1", [], |row| {
+                row.get(0)
+            })
+            .map_err(|e| e.to_string())?;
+        if format!("{:x}", Sha256::digest(current.as_bytes())) != expected_current_sha256 {
+            return Err(
+                "local data changed after replacement; undo would discard newer work".into(),
+            );
+        }
         transaction
             .execute(
                 "UPDATE app_state SET payload = ?1 WHERE id = 1",

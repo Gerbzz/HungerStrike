@@ -227,9 +227,9 @@ pub fn apply_import(
 }
 
 pub fn restore_last_import(store: &mut Store) -> Result<(), String> {
-    let (id, raw) = store
+    let (id, raw, expected_current_sha256) = store
         .latest_restore_point()?
         .ok_or("no local restore point exists")?;
     let previous = parse_backup(raw.as_bytes())?;
-    store.apply_restore_point(id, &previous.payload)
+    store.apply_restore_point(id, &previous.payload, &expected_current_sha256)
 }
