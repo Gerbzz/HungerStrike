@@ -50,11 +50,42 @@ fn quantity_and_unit(line: &str) -> (Option<String>, Option<String>) {
         };
         return (Some(quantity.to_string()), Some(unit.to_string()));
     }
+    if let Some(first) = words.first() {
+        let number = first.trim_end_matches(['x', 'X']);
+        if number.parse::<rust_decimal::Decimal>().is_ok() && words.len() > 1 {
+            return (Some(number.to_string()), Some("each".into()));
+        }
+    }
     (None, None)
 }
 
 fn name_category(line: &str) -> (String, String) {
-    let upper = line.to_ascii_uppercase();
+    let words: Vec<&str> = line.split_whitespace().collect();
+    let start = if words.first().is_some_and(|word| {
+        word.trim_end_matches(['x', 'X'])
+            .parse::<rust_decimal::Decimal>()
+            .is_ok()
+    }) {
+        match words.get(1).map(|word| word.to_ascii_uppercase()) {
+            Some(unit)
+                if ["LB", "GAL", "CT", "OZ", "BTL", "PACK", "EA"].contains(&unit.as_str()) =>
+            {
+                2
+            }
+            Some(unit) if unit == "@" || unit == "X" => {
+                if words.get(2).and_then(|word| cents(word)).is_some() {
+                    3
+                } else {
+                    2
+                }
+            }
+            _ => 1,
+        }
+    } else {
+        0
+    };
+    let product = words.get(start..).unwrap_or(&[]).join(" ");
+    let upper = product.to_ascii_uppercase();
     let known = match upper.as_str() {
         s if s.starts_with("BANANAS") => ("bananas", "food.produce"),
         s if s.starts_with("MILK 2%") => ("milk 2%", "food.dairy"),
@@ -75,7 +106,7 @@ fn name_category(line: &str) -> (String, String) {
     if !known.0.is_empty() {
         return (known.0.into(), known.1.into());
     }
-    let words: Vec<&str> = line.split_whitespace().collect();
+    let words: Vec<&str> = product.split_whitespace().collect();
     let end = words
         .iter()
         .position(|word| word.parse::<rust_decimal::Decimal>().is_ok() || *word == "??")
@@ -132,7 +163,20 @@ fn is_metadata(line: &str) -> bool {
         || upper.starts_with("TAX EXEMPT")
         || upper.starts_with("HTTP")
         || upper.starts_with("WWW.")
-        || (line.chars().next().is_some_and(|c| c.is_ascii_digit()) && !line.contains(" @ "))
+        || (line.split_whitespace().last().is_some_and(|word| {
+            ["ST", "ST.", "AVE", "AVE.", "RD", "RD.", "BLVD"]
+                .contains(&word.to_ascii_uppercase().as_str())
+        }) && final_amount(line).is_none())
+}
+
+fn purchase_date(line: &str) -> Option<String> {
+    let date = line.split_whitespace().last()?;
+    for format in ["%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y"] {
+        if let Ok(date) = chrono::NaiveDate::parse_from_str(date, format) {
+            return Some(date.to_string());
+        }
+    }
+    Some(date.to_string())
 }
 
 pub fn parse_text(raw: &str) -> ReceiptDraft {
@@ -169,11 +213,14 @@ pub fn parse_text(raw: &str) -> ReceiptDraft {
             let words: Vec<&str> = line.split_whitespace().collect();
             draft.id = words.get(2).copied().unwrap_or("").to_string();
             draft.purchase_date = words.get(4).map(|s| s.to_string());
-        } else if upper.starts_with("DATE ") || upper.starts_with("DATE:") {
-            draft.purchase_date = line.split_whitespace().last().map(str::to_string);
-        } else if upper.starts_with("SUBTOTAL") {
+        } else if upper.starts_with("DATE ")
+            || upper.starts_with("DATE:")
+            || upper.starts_with("TRANSACTION DATE")
+        {
+            draft.purchase_date = purchase_date(line);
+        } else if upper.starts_with("SUBTOTAL") || upper.starts_with("SUB TOTAL") {
             draft.printed_subtotal_cents = final_amount(line);
-        } else if upper.starts_with("TAX ") {
+        } else if upper.starts_with("TAX ") || upper.starts_with("SALES TAX") {
             draft.printed_tax_cents = final_amount(line);
         } else if upper.starts_with("TOTAL") && !is_metadata(line) {
             draft.printed_total_cents = final_amount(line);
@@ -200,14 +247,15 @@ pub fn parse_text(raw: &str) -> ReceiptDraft {
         } else if upper.contains(" DISC") {
             let amount = final_amount(line);
             let target = draft.items.iter_mut().rev().find(|item| {
-                upper.contains(
-                    &item
-                        .raw
-                        .split_whitespace()
-                        .next()
-                        .unwrap_or("~")
-                        .to_ascii_uppercase(),
-                )
+                upper.contains(&item.name.to_ascii_uppercase())
+                    || upper.contains(
+                        &item
+                            .raw
+                            .split_whitespace()
+                            .find(|word| word.chars().any(|c| c.is_ascii_alphabetic()))
+                            .unwrap_or("~")
+                            .to_ascii_uppercase(),
+                    )
             });
             if let (Some(amount), Some(item)) = (amount, target) {
                 item.discount_cents = item.discount_cents.checked_add(amount).unwrap_or(i64::MAX);

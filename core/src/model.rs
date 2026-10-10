@@ -134,6 +134,8 @@ pub struct ReceiptEdit {
     pub before_total_cents: Option<i64>,
     pub after_total_cents: Option<i64>,
     pub fields_changed: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub related_receipt_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

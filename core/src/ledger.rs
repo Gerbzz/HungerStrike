@@ -122,6 +122,7 @@ fn record_edit(
         before_total_cents: before.and_then(|d| d.printed_total_cents),
         after_total_cents: after.printed_total_cents,
         fields_changed: fields,
+        related_receipt_id: None,
     });
     Ok(())
 }
@@ -233,9 +234,7 @@ pub fn confirm_receipt(
         if digest(existing)? == incoming || last_reviewed == Some(incoming.as_str()) {
             return Ok(ConfirmOutcome::Duplicate);
         }
-        return Err(
-            "receipt source already imported with different review; use correct_receipt".into(),
-        );
+        return Err("receipt source already imported. Correct that receipt, or review a unique receipt ID and deliberately confirm a separate purchase".into());
     }
     if state
         .receipts
@@ -246,6 +245,59 @@ pub fn confirm_receipt(
     }
     apply_receipt(&mut state, &draft)?;
     record_edit(&mut state, None, &draft, "confirmed_review")?;
+    state.receipts.push(draft);
+    store.save(&state)?;
+    Ok(ConfirmOutcome::Accepted)
+}
+
+pub fn matching_source_receipt(
+    store: &Store,
+    source_sha256: &str,
+) -> Result<Option<(String, String)>, String> {
+    Ok(store
+        .load()?
+        .receipts
+        .iter()
+        .find(|receipt| receipt.source_sha256 == source_sha256)
+        .map(|receipt| {
+            (
+                receipt.id.clone(),
+                receipt.purchase_date.clone().unwrap_or_default(),
+            )
+        }))
+}
+
+pub fn confirm_separate_purchase(
+    store: &mut Store,
+    receipt: ReviewedReceipt,
+) -> Result<ConfirmOutcome, String> {
+    let draft = sanitized(review(receipt.draft).map_err(|e| e.to_string())?.draft);
+    let mut state = store.load()?;
+    let related = state
+        .receipts
+        .iter()
+        .find(|existing| existing.source_sha256 == draft.source_sha256)
+        .ok_or("no matching source was imported; use ordinary confirmation")?;
+    let related_id = related.id.clone();
+    if state
+        .receipts
+        .iter()
+        .any(|existing| existing.id == draft.id)
+    {
+        return Err("separate purchase needs a unique reviewed receipt ID".into());
+    }
+    if draft
+        .items
+        .iter()
+        .any(|item| state.lots.iter().any(|lot| lot.id == item.line_id))
+    {
+        return Err("separate purchase needs unique item line IDs".into());
+    }
+    apply_receipt(&mut state, &draft)?;
+    record_edit(&mut state, None, &draft, "separate_purchase_confirmed")?;
+    if let Some(edit) = state.receipt_edits.last_mut() {
+        edit.related_receipt_id = Some(related_id);
+    }
     state.receipts.push(draft);
     store.save(&state)?;
     Ok(ConfirmOutcome::Accepted)
@@ -266,11 +318,12 @@ pub fn correct_receipt(
     if digest(&old)? == digest(&draft)? {
         return Ok(ConfirmOutcome::Duplicate);
     }
-    if state
-        .receipts
-        .iter()
-        .enumerate()
-        .any(|(i, other)| i != index && other.source_sha256 == draft.source_sha256)
+    if old.source_sha256 != draft.source_sha256
+        && state
+            .receipts
+            .iter()
+            .enumerate()
+            .any(|(i, other)| i != index && other.source_sha256 == draft.source_sha256)
     {
         return Err("corrected source is already imported by another receipt".into());
     }

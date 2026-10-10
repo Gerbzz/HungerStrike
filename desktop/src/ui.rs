@@ -2,18 +2,26 @@ use std::io::Write;
 
 use bevy_egui::egui::{self, RichText};
 use hungerstrike_core::{
-    apply_import, budget_view, confirm_receipt, correct_receipt, export_backup, parse_text,
-    preview_import, recategorize_item, record_inventory_action, restore_last_import, review,
-    set_budget, suggest_meals, DraftItem, InventoryAction, Period, RecipeCollection, RefundLine,
-    ReplaceOrReconcile,
+    budget_view, recategorize_item, review, set_budget, suggest_meals, DraftItem, InventoryAction,
+    Period, RecipeCollection, RefundLine, ReplaceOrReconcile,
 };
 
-use crate::{ocr, AppState, Tab};
+use crate::{ocr, AppAction, AppState, ReceiptCommit, Tab};
 
 fn money(cents: i64) -> String {
     let sign = if cents < 0 { "-" } else { "" };
     let absolute = cents.unsigned_abs();
     format!("{sign}${}.{:02}", absolute / 100, absolute % 100)
+}
+
+fn metric(ui: &mut egui::Ui, label: &str, value: String, color: egui::Color32) {
+    egui::Frame::group(ui.style())
+        .fill(egui::Color32::from_rgb(38, 47, 51))
+        .show(ui, |ui| {
+            ui.set_min_width(112.0);
+            ui.label(RichText::new(value).size(22.0).strong().color(color));
+            ui.label(RichText::new(label).size(13.0));
+        });
 }
 
 fn option_text(ui: &mut egui::Ui, label: &str, value: &mut Option<String>) {
@@ -44,9 +52,36 @@ fn option_cents(ui: &mut egui::Ui, label: &str, value: &mut Option<i64>) {
 }
 
 pub fn draw(ctx: &egui::Context, state: &mut AppState) {
+    if !state.style_ready {
+        let mut style = (*ctx.style()).clone();
+        style
+            .text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(17.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(17.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Heading, egui::FontId::proportional(25.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Small, egui::FontId::proportional(14.0));
+        style.spacing.item_spacing = egui::vec2(10.0, 9.0);
+        style.spacing.button_padding = egui::vec2(12.0, 7.0);
+        style.visuals.panel_fill = egui::Color32::from_rgb(24, 29, 34);
+        style.visuals.window_fill = egui::Color32::from_rgb(31, 37, 42);
+        ctx.set_style(style);
+        state.style_ready = true;
+    }
     egui::TopBottomPanel::top("header").show(ctx, |ui| {
+        ui.set_min_height(54.0);
         ui.horizontal_wrapped(|ui| {
-            ui.heading("HungerStrike");
+            ui.label(
+                RichText::new("HungerStrike")
+                    .size(25.0)
+                    .strong()
+                    .color(egui::Color32::from_rgb(152, 220, 179)),
+            );
             ui.separator();
             for (label, tab) in [
                 ("Kitchen", Tab::Kitchen),
@@ -55,60 +90,177 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                 ("Spending", Tab::Spending),
                 ("Data", Tab::Data),
             ] {
-                if ui.selectable_label(state.tab == tab, label).clicked() {
-                    state.tab = tab;
+                if ui
+                    .selectable_label(state.tab == tab, RichText::new(label).size(17.0))
+                    .clicked()
+                {
+                    let _ = state.dispatch(AppAction::Navigate(tab));
                 }
             }
             ui.separator();
-            ui.label(RichText::new("LOCAL ONLY · Rust desktop preview").small());
+            ui.label(
+                RichText::new("PRIVATE · LOCAL DATA")
+                    .size(13.0)
+                    .color(egui::Color32::from_rgb(162, 188, 178)),
+            );
         });
     });
-    egui::SidePanel::left("controls")
-        .min_width(500.0)
-        .max_width(620.0)
-        .show(ctx, |ui| {
-            if !state.message.is_empty() {
-                egui::Frame::group(ui.style()).show(ui, |ui| {
-                    ui.label(&state.message);
-                });
-                ui.add_space(6.0);
-            }
-            egui::ScrollArea::vertical()
-                .auto_shrink([false, false])
-                .show(ui, |ui| match state.tab {
-                    Tab::Kitchen => kitchen(ui, state),
-                    Tab::Receipt => receipt(ui, state),
-                    Tab::Meals => meals(ui, state),
-                    Tab::Spending => spending(ui, state),
-                    Tab::Data => data(ui, state),
-                });
+    if state.tab == Tab::Kitchen {
+        egui::SidePanel::left("controls")
+            .resizable(true)
+            .default_width(450.0)
+            .min_width(390.0)
+            .max_width(600.0)
+            .frame(
+                egui::Frame::default()
+                    .fill(egui::Color32::from_rgb(24, 29, 34))
+                    .inner_margin(egui::Margin::same(18)),
+            )
+            .show(ctx, |ui| {
+                if !state.message.is_empty() {
+                    egui::Frame::group(ui.style()).show(ui, |ui| {
+                        ui.label(&state.message);
+                    });
+                    ui.add_space(8.0);
+                }
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| kitchen(ui, state));
+            });
+        egui::TopBottomPanel::bottom("scene_help").show(ctx, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Select a storage zone or shelf item. Arrow keys orbit and zoom.");
+                if ui.button("Rotate left").clicked() {
+                    state.camera_yaw -= 0.35;
+                }
+                if ui.button("Rotate right").clicked() {
+                    state.camera_yaw += 0.35;
+                }
+                if ui.button("Zoom +").clicked() {
+                    state.camera_distance = (state.camera_distance - 1.0).max(5.5);
+                }
+                if ui.button("Zoom out").clicked() {
+                    state.camera_distance = (state.camera_distance + 1.0).min(18.0);
+                }
+            });
         });
-    egui::TopBottomPanel::bottom("scene_help").show(ctx, |ui| {
-        ui.horizontal(|ui| {
-            ui.label("Click a 3D appliance to filter stock. Arrow keys orbit and zoom.");
-            if ui.button("Rotate left").clicked() {
-                state.camera_yaw -= 0.35;
-            }
-            if ui.button("Rotate right").clicked() {
-                state.camera_yaw += 0.35;
-            }
-            if ui.button("Zoom +").clicked() {
-                state.camera_distance = (state.camera_distance - 1.0).max(5.5);
-            }
-            if ui.button("Zoom out").clicked() {
-                state.camera_distance = (state.camera_distance + 1.0).min(18.0);
-            }
-        });
-    });
+        egui::Area::new("zone_legend".into())
+            .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-20.0, 70.0))
+            .show(ctx, |ui| {
+                egui::Frame::group(ui.style())
+                    .fill(egui::Color32::from_rgba_unmultiplied(27, 34, 40, 245))
+                    .show(ui, |ui| {
+                        ui.strong("OPEN STORAGE");
+                        for (zone, label, color) in [
+                            ("fridge", "Fridge", egui::Color32::from_rgb(99, 200, 194)),
+                            ("freezer", "Freezer", egui::Color32::from_rgb(138, 189, 247)),
+                            ("pantry", "Pantry", egui::Color32::from_rgb(235, 173, 105)),
+                        ] {
+                            let count = state
+                                .snapshot
+                                .lots
+                                .iter()
+                                .filter(|lot| lot.zone == zone && lot.quantity != "0")
+                                .count();
+                            if ui
+                                .selectable_label(
+                                    state.zone == zone,
+                                    RichText::new(format!("{label}  {count}")).color(color),
+                                )
+                                .clicked()
+                            {
+                                let _ = state.dispatch(AppAction::SelectZone(zone.into()));
+                            }
+                        }
+                    });
+            });
+    } else {
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::default()
+                    .fill(egui::Color32::from_rgb(24, 29, 34))
+                    .inner_margin(egui::Margin::same(26)),
+            )
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.set_max_width(1040.0);
+                        if !state.message.is_empty() {
+                            egui::Frame::group(ui.style()).show(ui, |ui| {
+                                ui.label(&state.message);
+                            });
+                            ui.add_space(12.0);
+                        }
+                        match state.tab {
+                            Tab::Kitchen => {}
+                            Tab::Receipt => receipt(ui, state),
+                            Tab::Meals => meals(ui, state),
+                            Tab::Spending => spending(ui, state),
+                            Tab::Data => data(ui, state),
+                        }
+                    });
+            });
+    }
 }
 
 fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
-    ui.heading("Kitchen stock");
-    ui.label("The 3D fridge, freezer and pantry show confirmed stock. The list provides the same zone selection and stock actions by keyboard.");
+    ui.heading("Your kitchen");
+    ui.label("Confirmed food stock in your fridge, freezer and pantry.");
+    let today = chrono::NaiveDate::parse_from_str(&state.reference_date, "%Y-%m-%d").ok();
+    let stocked = state
+        .snapshot
+        .lots
+        .iter()
+        .filter(|lot| lot.quantity != "0")
+        .count();
+    let soon =
+        state
+            .snapshot
+            .lots
+            .iter()
+            .filter(|lot| {
+                lot.quantity != "0"
+                    && today
+                        .zip(lot.expiry_date.as_deref().and_then(|date| {
+                            chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()
+                        }))
+                        .is_some_and(|(today, expiry)| {
+                            (0..=3).contains(&expiry.signed_duration_since(today).num_days())
+                        })
+            })
+            .count();
     ui.horizontal(|ui| {
-        for zone in ["all", "fridge", "freezer", "pantry"] {
-            if ui.selectable_label(state.zone == zone, zone).clicked() {
-                state.zone = zone.into();
+        metric(
+            ui,
+            "stock lots",
+            stocked.to_string(),
+            egui::Color32::from_rgb(153, 225, 185),
+        );
+        metric(
+            ui,
+            "use soon",
+            soon.to_string(),
+            egui::Color32::from_rgb(242, 188, 108),
+        );
+        metric(
+            ui,
+            "stock value",
+            money(state.snapshot.remaining_food_cost_cents),
+            egui::Color32::from_rgb(155, 199, 237),
+        );
+    });
+    ui.add_space(10.0);
+    ui.strong("Browse a storage zone");
+    ui.horizontal_wrapped(|ui| {
+        for (zone, label) in [
+            ("all", "All stock"),
+            ("fridge", "Fridge"),
+            ("freezer", "Freezer"),
+            ("pantry", "Pantry"),
+        ] {
+            if ui.selectable_label(state.zone == zone, label).clicked() {
+                let _ = state.dispatch(AppAction::SelectZone(zone.into()));
             }
         }
     });
@@ -119,27 +271,42 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
         .filter(|lot| state.zone == "all" || lot.zone == state.zone)
         .collect();
     if visible.is_empty() {
-        ui.label("No confirmed stock in this zone.");
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.strong(if state.zone == "all" {
+                "Your kitchen is ready"
+            } else {
+                "This storage zone is empty"
+            });
+            ui.label("Add a receipt, correct the scanned lines, then confirm to place food here.");
+            if ui.button("Review a receipt").clicked() {
+                let _ = state.dispatch(AppAction::Navigate(Tab::Receipt));
+            }
+        });
     }
     for lot in &visible {
-        ui.horizontal_wrapped(|ui| {
-            if ui
-                .selectable_label(state.lot_id == lot.id, &lot.name)
-                .clicked()
-            {
-                state.lot_id = lot.id.clone();
-                state.quantity = "1".into();
-            }
-            ui.label(format!("{} {} · {}", lot.quantity, lot.unit, lot.zone));
-            ui.label(if lot.cost_unknown {
-                "cost unknown".into()
-            } else {
-                money(lot.remaining_cost_cents)
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.set_min_width(ui.available_width().min(390.0));
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .selectable_label(state.lot_id == lot.id, RichText::new(&lot.name).strong())
+                    .clicked()
+                {
+                    let _ = state.dispatch(AppAction::SelectLot(lot.id.clone()));
+                }
+                ui.label(format!("{} {}", lot.quantity, lot.unit));
             });
-            ui.label(format!(
-                "expiry {}",
-                lot.expiry_date.as_deref().unwrap_or("unknown")
-            ));
+            ui.horizontal_wrapped(|ui| {
+                ui.label(format!("{} storage", lot.zone));
+                ui.label(if lot.cost_unknown {
+                    "cost unknown".into()
+                } else {
+                    money(lot.remaining_cost_cents)
+                });
+                ui.label(format!(
+                    "use by {}",
+                    lot.expiry_date.as_deref().unwrap_or("unknown")
+                ));
+            });
         });
     }
     if let Some(lot) = state
@@ -184,22 +351,13 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
             }
         });
         if let Some(action) = action {
-            let result = state
-                .store
-                .lock()
-                .map_err(|e| e.to_string())
-                .and_then(|mut store| record_inventory_action(&mut store, action));
-            state.message = match result {
-                Ok(()) => {
-                    let _ = state.refresh();
-                    "Inventory updated.".into()
-                }
-                Err(e) => e,
-            };
+            if let Err(error) = state.dispatch(AppAction::Inventory(action)) {
+                state.message = error;
+            }
         }
     }
     ui.separator();
-    ui.heading("Spending categories");
+    egui::CollapsingHeader::new("Edit spending categories").show(ui, |ui| {
     ui.label("Choose a confirmed line to change its category. Cross-group moves after stock use or linked refunds are blocked.");
     let lines = state.snapshot.receipt_items.clone();
     for item in &lines {
@@ -245,62 +403,120 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
             };
         }
     }
+    });
 }
 
 fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
-    ui.heading("Receipt review");
+    ui.heading("Review a receipt");
     ui.label(
-        "Import text or a local PNG/JPEG. Nothing changes inventory until you review and confirm.",
+        "Paste text or open a local PNG/JPEG. Review the lines and totals before anything enters inventory.",
     );
-    ui.add(
-        egui::TextEdit::multiline(&mut state.raw_text)
-            .desired_rows(6)
-            .desired_width(ui.available_width())
-            .hint_text("Paste receipt text here"),
-    );
+    if state.ocr_task.is_some() {
+        ui.colored_label(
+            egui::Color32::from_rgb(242, 188, 108),
+            "Offline OCR is running. Cancel and clear stops the engine.",
+        );
+    }
+    egui::ScrollArea::vertical()
+        .id_salt("receipt_source_scroll")
+        .max_height(170.0)
+        .show(ui, |ui| {
+            ui.add(
+                egui::TextEdit::multiline(&mut state.raw_text)
+                    .desired_width(ui.available_width())
+                    .hint_text("Paste receipt text here"),
+            );
+        });
     ui.horizontal(|ui| {
         if ui.button("Parse text").clicked() {
-            state.draft = Some(parse_text(&state.raw_text));
-            state.message = "Review every field, including the date and uncertain lines.".into();
+            if let Err(error) = state.dispatch(AppAction::ParseReceipt) {
+                state.message = error;
+            }
         }
-        if ui.button("Open photo · offline OCR").clicked() {
+        if ui
+            .add_enabled(
+                state.ocr_task.is_none(),
+                egui::Button::new("Open photo · offline OCR"),
+            )
+            .clicked()
+        {
             if let Some(path) = rfd::FileDialog::new()
                 .add_filter("Receipt photo", &["png", "jpg", "jpeg"])
                 .pick_file()
             {
-                let result = std::fs::read(path)
+                let result = std::fs::metadata(&path)
                     .map_err(|e| e.to_string())
-                    .and_then(|bytes| {
-                        ocr::extract_local_image(&bytes, &ocr::installed_engine())
-                            .map_err(|e| e.to_string())
-                    });
-                match result {
-                    Ok(text) => {
-                        state.draft = Some(parse_text(&text));
-                        state.raw_text = text;
-                        state.message =
-                            "OCR text is local and temporary. Verify every field.".into();
-                    }
-                    Err(error) => {
-                        state.message = format!("{error}. Paste or type the receipt instead.")
-                    }
+                    .and_then(|metadata| {
+                        if metadata.len() > ocr::MAX_IMAGE_BYTES as u64 {
+                            Err("Receipt photo is over the 8 MB local limit".into())
+                        } else {
+                            std::fs::read(&path).map_err(|e| e.to_string())
+                        }
+                    })
+                    .and_then(|bytes| state.dispatch(AppAction::StartOcr(bytes)));
+                if let Err(error) = result {
+                    state.message = format!("{error}. Paste or type the receipt instead.");
                 }
             }
         }
         if ui.button("Cancel and clear").clicked() {
-            state.clear_receipt();
-            state.message = "Temporary receipt text cleared.".into();
+            let _ = state.dispatch(AppAction::CancelReceipt);
         }
     });
     let Some(mut draft) = state.draft.take() else {
         return;
     };
+    ui.add_space(14.0);
     ui.separator();
+    ui.heading("1. Check receipt details");
+    ui.horizontal(|ui| {
+        metric(
+            ui,
+            "purchase lines",
+            draft.items.len().to_string(),
+            egui::Color32::from_rgb(153, 225, 185),
+        );
+        metric(
+            ui,
+            "printed total",
+            draft
+                .printed_total_cents
+                .map(money)
+                .unwrap_or_else(|| "unknown".into()),
+            egui::Color32::from_rgb(155, 199, 237),
+        );
+        metric(
+            ui,
+            "source flags",
+            draft.uncertainty.len().to_string(),
+            egui::Color32::from_rgb(242, 188, 108),
+        );
+    });
     ui.horizontal(|ui| {
         ui.label("Receipt ID");
-        ui.text_edit_singleline(&mut draft.id);
+        let previous_id = draft.id.clone();
+        if ui.text_edit_singleline(&mut draft.id).changed() {
+            for item in &mut draft.items {
+                if let Some(suffix) = item.line_id.strip_prefix(&format!("{previous_id}-L")) {
+                    item.line_id = format!("{}-L{}", draft.id, suffix);
+                }
+            }
+            state.separate_ack = false;
+        }
     });
+    let previous_date = draft.purchase_date.clone();
     option_text(ui, "Purchase date YYYY-MM-DD", &mut draft.purchase_date);
+    if draft.purchase_date != previous_date {
+        state.separate_ack = false;
+    }
+    if let Some((id, date)) = &state.source_match {
+        ui.colored_label(egui::Color32::YELLOW,
+            format!("Matching source already imported as {id} on {date}. Review the identity and date before choosing a separate purchase."));
+        ui.checkbox(
+            &mut state.separate_ack,
+            "I checked: this is a separate purchase",
+        );
+    }
     if !draft.uncertainty.is_empty() {
         ui.label(format!(
             "Source uncertainty: {}",
@@ -311,12 +527,51 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
     option_cents(ui, "Printed tax", &mut draft.printed_tax_cents);
     option_cents(ui, "Printed total", &mut draft.printed_total_cents);
     ui.label("Purchase date never sets an expiry date.");
+    let ready = review(draft.clone()).is_ok();
+    let mut confirmed_top = false;
+    ui.horizontal_wrapped(|ui| {
+        ui.label(if ready {
+            "Totals reconcile. Check the lines below."
+        } else {
+            "Correct the lines and totals below."
+        });
+        if ui
+            .add_enabled(ready, egui::Button::new("Confirm reviewed purchase"))
+            .clicked()
+        {
+            state.draft = Some(draft.clone());
+            match state.dispatch(AppAction::Commit(ReceiptCommit::New)) {
+                Ok(()) => confirmed_top = true,
+                Err(error) => state.message = error,
+            }
+        }
+        if state.source_match.is_some()
+            && ui
+                .add_enabled(
+                    ready && state.separate_ack,
+                    egui::Button::new("Confirm separate purchase"),
+                )
+                .clicked()
+        {
+            state.draft = Some(draft.clone());
+            match state.dispatch(AppAction::Commit(ReceiptCommit::Separate)) {
+                Ok(()) => confirmed_top = true,
+                Err(error) => state.message = error,
+            }
+        }
+    });
+    if confirmed_top {
+        return;
+    }
     let mut remove = None;
     ui.separator();
-    ui.strong("Purchased items");
+    ui.heading("2. Purchased items");
+    ui.label(
+        "Open each line to correct its name, quantity, unit, category, price and optional expiry.",
+    );
     for (index, item) in draft.items.iter_mut().enumerate() {
         egui::CollapsingHeader::new(format!("{} · {}", index + 1, item.name))
-            .default_open(!item.uncertainty.is_empty())
+            .default_open(index < 2 || !item.uncertainty.is_empty())
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Name");
@@ -381,7 +636,7 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
         });
     }
     ui.separator();
-    ui.strong("Refunds");
+    ui.heading("3. Refunds and adjustments");
     let mut remove_refund = None;
     for (index, refund) in draft.refunds.iter_mut().enumerate() {
         egui::CollapsingHeader::new(format!("Refund {} · {}", index + 1, refund.name))
@@ -457,57 +712,50 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
         "Accept unknown item costs with explicit reconciliation",
     );
     let valid = review(draft.clone()).is_ok();
-    if !valid {
+    if valid {
+        ui.colored_label(egui::Color32::from_rgb(153, 225, 185), "Ready to confirm. Inventory and spending will update only when you choose a confirmation action.");
+    } else {
         ui.colored_label(
             egui::Color32::YELLOW,
             "Needs correction: item fields, refund limits, subtotal and total must reconcile.",
         );
     }
+    ui.heading("4. Confirm your review");
     let mut confirmed = false;
     ui.horizontal(|ui| {
         if ui
             .add_enabled(valid, egui::Button::new("Confirm new receipt"))
             .clicked()
         {
-            let result = review(draft.clone())
-                .map_err(|e| e.to_string())
-                .and_then(|reviewed| {
-                    state
-                        .store
-                        .lock()
-                        .map_err(|e| e.to_string())
-                        .and_then(|mut store| confirm_receipt(&mut store, reviewed))
-                });
-            state.message = match result {
-                Ok(outcome) => {
-                    confirmed = true;
-                    let _ = state.refresh();
-                    format!("Receipt: {outcome:?}")
-                }
-                Err(e) => e,
-            };
+            state.draft = Some(draft.clone());
+            match state.dispatch(AppAction::Commit(ReceiptCommit::New)) {
+                Ok(()) => confirmed = true,
+                Err(error) => state.message = error,
+            }
+        }
+        if state.source_match.is_some()
+            && ui
+                .add_enabled(
+                    valid && state.separate_ack,
+                    egui::Button::new("Confirm separate purchase"),
+                )
+                .clicked()
+        {
+            state.draft = Some(draft.clone());
+            match state.dispatch(AppAction::Commit(ReceiptCommit::Separate)) {
+                Ok(()) => confirmed = true,
+                Err(error) => state.message = error,
+            }
         }
         if ui
             .add_enabled(valid, egui::Button::new("Correct existing receipt"))
             .clicked()
         {
-            let result = review(draft.clone())
-                .map_err(|e| e.to_string())
-                .and_then(|reviewed| {
-                    state
-                        .store
-                        .lock()
-                        .map_err(|e| e.to_string())
-                        .and_then(|mut store| correct_receipt(&mut store, reviewed))
-                });
-            state.message = match result {
-                Ok(outcome) => {
-                    confirmed = true;
-                    let _ = state.refresh();
-                    format!("Receipt: {outcome:?}")
-                }
-                Err(e) => e,
-            };
+            state.draft = Some(draft.clone());
+            match state.dispatch(AppAction::Commit(ReceiptCommit::Correct)) {
+                Ok(()) => confirmed = true,
+                Err(error) => state.message = error,
+            }
         }
     });
     if confirmed {
@@ -518,7 +766,8 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
 }
 
 fn meals(ui: &mut egui::Ui, state: &mut AppState) {
-    ui.heading("Meals from stock");
+    ui.heading("Meals from your stock");
+    ui.label("Suggestions use confirmed quantities. Estimated cost comes from remaining lot cost; unknown prices stay unknown.");
     ui.horizontal(|ui| {
         ui.label("Today YYYY-MM-DD");
         ui.text_edit_singleline(&mut state.reference_date);
@@ -530,47 +779,86 @@ fn meals(ui: &mut egui::Ui, state: &mut AppState) {
     });
     match result {
         Ok(meals) => {
-            for meal in meals {
-                egui::CollapsingHeader::new(&meal.name).show(ui, |ui| {
-                    ui.label(format!(
-                        "{} servings · {}",
-                        meal.servings,
+            let ready = meals.iter().filter(|meal| meal.available).count();
+            let use_soon = meals
+                .iter()
+                .filter(|meal| !meal.soon_expiring.is_empty())
+                .count();
+            ui.horizontal(|ui| {
+                metric(
+                    ui,
+                    "cook now",
+                    ready.to_string(),
+                    egui::Color32::from_rgb(153, 225, 185),
+                );
+                metric(
+                    ui,
+                    "use soon",
+                    use_soon.to_string(),
+                    egui::Color32::from_rgb(242, 188, 108),
+                );
+            });
+            if state.snapshot.lots.is_empty() {
+                ui.label("Confirm a receipt to see which meals you can cook from your own stock.");
+            }
+            for (index, meal) in meals.into_iter().enumerate() {
+                egui::Frame::group(ui.style()).show(ui, |ui| {
+                    ui.set_min_width(ui.available_width().min(760.0));
+                    ui.colored_label(
                         if meal.available {
-                            "ingredients available"
+                            egui::Color32::from_rgb(153, 225, 185)
                         } else {
-                            "ingredients missing"
-                        }
-                    ));
-                    ui.label(format!(
-                        "Estimated stock cost: {} · {}",
-                        meal.estimate_cents
-                            .map(money)
-                            .unwrap_or_else(|| "unknown".into()),
-                        meal.estimate_status
-                    ));
-                    if !meal.soon_expiring.is_empty() {
-                        ui.label(format!("Use soon: {}", meal.soon_expiring.join(", ")));
-                    }
-                    if meal.expiry_unknown {
-                        ui.label("Some expiry dates are unknown.");
-                    }
-                    for ingredient in meal.ingredients {
-                        ui.label(format!(
-                            "{}: use {} {} · missing {} · {}",
-                            ingredient.name,
-                            ingredient.stock_used_quantity,
-                            ingredient.unit,
-                            ingredient.missing_quantity,
-                            if ingredient.cost_unknown {
-                                "cost unknown".into()
-                            } else {
-                                money(ingredient.estimated_cost_cents)
+                            egui::Color32::from_rgb(236, 187, 117)
+                        },
+                        if meal.available {
+                            "READY FROM STOCK"
+                        } else {
+                            "NEEDS INGREDIENTS"
+                        },
+                    );
+                    egui::CollapsingHeader::new(&meal.name)
+                        .default_open(index < 2)
+                        .show(ui, |ui| {
+                            ui.label(format!(
+                                "{} servings · {}",
+                                meal.servings,
+                                if meal.available {
+                                    "ingredients available"
+                                } else {
+                                    "ingredients missing"
+                                }
+                            ));
+                            ui.label(format!(
+                                "Estimated stock cost: {} · {}",
+                                meal.estimate_cents
+                                    .map(money)
+                                    .unwrap_or_else(|| "unknown".into()),
+                                meal.estimate_status
+                            ));
+                            if !meal.soon_expiring.is_empty() {
+                                ui.label(format!("Use soon: {}", meal.soon_expiring.join(", ")));
                             }
-                        ));
-                    }
-                    for step in meal.steps {
-                        ui.label(step);
-                    }
+                            if meal.expiry_unknown {
+                                ui.label("Some expiry dates are unknown.");
+                            }
+                            for ingredient in meal.ingredients {
+                                ui.label(format!(
+                                    "{}: use {} {} · missing {} · {}",
+                                    ingredient.name,
+                                    ingredient.stock_used_quantity,
+                                    ingredient.unit,
+                                    ingredient.missing_quantity,
+                                    if ingredient.cost_unknown {
+                                        "cost unknown".into()
+                                    } else {
+                                        money(ingredient.estimated_cost_cents)
+                                    }
+                                ));
+                            }
+                            for step in meal.steps {
+                                ui.label(step);
+                            }
+                        });
                 });
             }
         }
@@ -581,7 +869,33 @@ fn meals(ui: &mut egui::Ui, state: &mut AppState) {
 }
 
 fn spending(ui: &mut egui::Ui, state: &mut AppState) {
-    ui.heading("Spending");
+    ui.heading("Spending overview");
+    ui.label("Receipt cash, item allocation and stock-use costs are shown separately so they do not double count.");
+    ui.horizontal(|ui| {
+        metric(
+            ui,
+            "cash flow",
+            money(state.snapshot.cash_flow_cents),
+            egui::Color32::from_rgb(153, 225, 185),
+        );
+        metric(
+            ui,
+            "food lines",
+            money(state.snapshot.food_spending_cents),
+            egui::Color32::from_rgb(155, 199, 237),
+        );
+        metric(
+            ui,
+            "discarded",
+            money(state.snapshot.discarded_cost_cents),
+            egui::Color32::from_rgb(242, 188, 108),
+        );
+    });
+    if state.snapshot.receipt_count == 0 {
+        ui.label("No confirmed purchases yet. Review a receipt to start a local spending history.");
+    }
+    ui.add_space(8.0);
+    ui.heading("Allocation details");
     ui.label(format!(
         "Cash paid / refunded: {}",
         money(state.snapshot.cash_flow_cents)
@@ -614,6 +928,7 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
         state.snapshot.unpriced_lot_count
     ));
     ui.separator();
+    ui.heading("Weekly and monthly budgets");
     ui.horizontal(|ui| {
         ui.label("Reference date YYYY-MM-DD");
         ui.text_edit_singleline(&mut state.reference_date);
@@ -713,19 +1028,14 @@ fn data(ui: &mut egui::Ui, state: &mut AppState) {
             .add_filter("JSON backup", &["json"])
             .save_file()
         {
-            let result = state
-                .store
-                .lock()
-                .map_err(|e| e.to_string())
-                .and_then(|store| export_backup(&store)?.to_bytes())
-                .and_then(|bytes| {
-                    let parent = path.parent().ok_or("backup path has no parent")?;
-                    let mut temp =
-                        tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
-                    temp.write_all(&bytes).map_err(|e| e.to_string())?;
-                    temp.persist(&path).map_err(|e| e.to_string())?;
-                    Ok(())
-                });
+            let result = state.export_backup_bytes().and_then(|bytes| {
+                let parent = path.parent().ok_or("backup path has no parent")?;
+                let mut temp =
+                    tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+                temp.write_all(&bytes).map_err(|e| e.to_string())?;
+                temp.persist(&path).map_err(|e| e.to_string())?;
+                Ok(())
+            });
             state.message = result
                 .map(|_| format!("Saved backup to {}", path.display()))
                 .unwrap_or_else(|e| e);
@@ -738,21 +1048,9 @@ fn data(ui: &mut egui::Ui, state: &mut AppState) {
         {
             let result = std::fs::read(&path)
                 .map_err(|e| e.to_string())
-                .and_then(|bytes| {
-                    state
-                        .store
-                        .lock()
-                        .map_err(|e| e.to_string())
-                        .and_then(|store| {
-                            preview_import(&store, &bytes).map(|preview| (bytes, preview))
-                        })
-                });
+                .and_then(|bytes| state.dispatch(AppAction::PreviewBackup(bytes)));
             match result {
-                Ok((bytes, preview)) => {
-                    state.backup_bytes = Some(bytes);
-                    state.backup_preview = Some(preview);
-                    state.message = format!("Preview loaded from {}", path.display());
-                }
+                Ok(()) => state.message = format!("Preview loaded from {}", path.display()),
                 Err(error) => state.message = error,
             }
         }
@@ -778,36 +1076,16 @@ fn data(ui: &mut egui::Ui, state: &mut AppState) {
                 mode = Some(ReplaceOrReconcile::Replace);
             }
         });
-        if let (Some(mode), Some(bytes)) = (mode, state.backup_bytes.as_ref()) {
-            let result = state
-                .store
-                .lock()
-                .map_err(|e| e.to_string())
-                .and_then(|mut store| apply_import(&mut store, bytes, mode));
-            state.message = match result {
-                Ok(outcome) => {
-                    let _ = state.refresh();
-                    state.backup_bytes = None;
-                    state.backup_preview = None;
-                    format!("Backup: {outcome:?}")
-                }
-                Err(error) => error,
-            };
+        if let Some(mode) = mode {
+            if let Err(error) = state.dispatch(AppAction::ApplyBackup(mode)) {
+                state.message = error;
+            }
         }
     }
     if ui.button("Undo last replacement").clicked() {
-        let result = state
-            .store
-            .lock()
-            .map_err(|e| e.to_string())
-            .and_then(|mut store| restore_last_import(&mut store));
-        state.message = match result {
-            Ok(()) => {
-                let _ = state.refresh();
-                "Replacement undone.".into()
-            }
-            Err(error) => error,
-        };
+        if let Err(error) = state.dispatch(AppAction::UndoBackup) {
+            state.message = error;
+        }
     }
     ui.separator();
     ui.label(format!(

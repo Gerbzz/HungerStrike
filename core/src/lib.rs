@@ -13,7 +13,10 @@ pub use backup::{
 };
 pub use budget::{budget_view, set_budget, BudgetView, Period};
 pub use inventory::record_inventory_action;
-pub use ledger::{confirm_receipt, correct_receipt, recategorize_item, snapshot};
+pub use ledger::{
+    confirm_receipt, confirm_separate_purchase, correct_receipt, matching_source_receipt,
+    recategorize_item, snapshot,
+};
 pub use model::{
     AppSnapshot, CategoryEdit, ConfirmOutcome, InventoryAction, LotView, ReceiptEdit,
     ReceiptItemView,

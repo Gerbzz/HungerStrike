@@ -1,6 +1,7 @@
 use hungerstrike_core::{
-    confirm_receipt, correct_receipt, parse_text, recategorize_item, record_inventory_action,
-    review, snapshot, suggest_meals, ConfirmOutcome, InventoryAction, RecipeCollection, Store,
+    confirm_receipt, confirm_separate_purchase, correct_receipt, export_backup, parse_text,
+    preview_import, recategorize_item, record_inventory_action, review, snapshot, suggest_meals,
+    ConfirmOutcome, InventoryAction, RecipeCollection, Store,
 };
 
 const ORDINARY: &str = "ACME GROCERY\n123 MAIN ST\nDATE 2026-10-03\nMILK 2% 1 GAL 4.29\nSUBTOTAL 4.29\nTAX 0.00\nTOTAL 4.29\nVISA ENDING 1234\n";
@@ -12,6 +13,63 @@ fn ordinary_receipt_does_not_turn_metadata_or_payment_into_items() {
     assert_eq!(draft.items.len(), 1);
     assert_eq!(draft.items[0].name, "milk 2%");
     assert!(draft.items.iter().all(|item| !item.raw.contains("1234")));
+}
+
+#[test]
+fn quantity_first_market_layout_is_reviewable_and_reconciles() {
+    let raw = "FRESH MARKET\nDATE: 10/03/2026\n2 MILK 2% 8.58\n1.25 LB BANANAS @ 0.59 0.74\nSUB TOTAL 9.32\nSALES TAX 0.00\nTOTAL DUE 9.32";
+    let draft = parse_text(raw);
+    assert_eq!(draft.purchase_date.as_deref(), Some("2026-10-03"));
+    assert_eq!(draft.items.len(), 2);
+    assert_eq!(
+        (
+            draft.items[0].name.as_str(),
+            draft.items[0].quantity.as_deref(),
+            draft.items[0].unit.as_deref()
+        ),
+        ("milk 2%", Some("2"), Some("each"))
+    );
+    assert_eq!(
+        (
+            draft.items[1].name.as_str(),
+            draft.items[1].quantity.as_deref(),
+            draft.items[1].unit.as_deref()
+        ),
+        ("bananas", Some("1.25"), Some("lb"))
+    );
+    assert_eq!(draft.known_subtotal_cents, 932);
+    assert!(review(draft).is_ok());
+}
+
+#[test]
+fn quantity_first_at_price_layout_and_incomplete_line_are_not_omitted() {
+    let draft = parse_text("DATE 2026-10-03\n2 @ 1.79 PASTA 3.58\nPASTA DISC -1.79\n3 CHKN BRST\nSUBTOTAL 1.79\nTAX 0.00\nTOTAL 1.79");
+    assert_eq!(draft.items.len(), 2);
+    assert_eq!(
+        (
+            draft.items[0].name.as_str(),
+            draft.items[0].quantity.as_deref(),
+            draft.items[0].net_cents
+        ),
+        ("pasta", Some("2"), Some(179))
+    );
+    assert_eq!(draft.items[1].name, "chicken breast");
+    assert_eq!(draft.items[1].quantity.as_deref(), Some("3"));
+    assert_eq!(draft.items[1].net_cents, None);
+    assert!(draft.items[1]
+        .uncertainty
+        .iter()
+        .any(|x| x.contains("amount")));
+    assert!(review(draft).is_err());
+}
+
+#[test]
+fn short_quantity_first_line_is_visible_for_manual_resolution() {
+    let draft = parse_text("DATE 2026-10-03\n2 MILK\nSUBTOTAL 0.00\nTAX 0.00\nTOTAL 0.00");
+    assert_eq!(draft.items.len(), 1);
+    assert_eq!(draft.items[0].quantity.as_deref(), Some("2"));
+    assert_eq!(draft.items[0].net_cents, None);
+    assert!(review(draft).is_err());
 }
 
 #[test]
@@ -150,6 +208,62 @@ fn whitespace_variation_is_same_import() {
         confirm_receipt(&mut store, review(parse_text(variant)).unwrap()).unwrap(),
         ConfirmOutcome::Duplicate
     );
+    assert_eq!(snapshot(&store).unwrap().receipt_count, 1);
+}
+
+#[test]
+fn repeated_source_needs_deliberate_unique_identity_and_is_audited() {
+    let source = "DATE 2026-10-03\nMILK 2% 1 GAL 4.29\nSUBTOTAL 4.29\nTAX 0.00\nTOTAL 4.29";
+    let mut store = Store::open_in_memory().unwrap();
+    let mut first = parse_text(source);
+    first.id = "FIRST".into();
+    first.items[0].line_id = "FIRST-L01".into();
+    confirm_receipt(&mut store, review(first).unwrap()).unwrap();
+
+    let mut second = parse_text(source);
+    second.id = "SECOND".into();
+    second.purchase_date = Some("2026-10-04".into());
+    second.items[0].line_id = "SECOND-L01".into();
+    assert!(confirm_receipt(&mut store, review(second.clone()).unwrap()).is_err());
+    assert_eq!(snapshot(&store).unwrap().receipt_count, 1);
+    assert_eq!(
+        confirm_separate_purchase(&mut store, review(second.clone()).unwrap()).unwrap(),
+        ConfirmOutcome::Accepted
+    );
+    assert!(confirm_separate_purchase(&mut store, review(second).unwrap()).is_err());
+    let snap = snapshot(&store).unwrap();
+    assert_eq!(
+        (snap.receipt_count, snap.cash_flow_cents, snap.lots.len()),
+        (2, 858, 2)
+    );
+    assert!(serde_json::to_value(&snap.receipt_edits[0])
+        .unwrap()
+        .get("related_receipt_id")
+        .is_none());
+    assert_eq!(snap.receipt_edits[1].action, "separate_purchase_confirmed");
+    assert_eq!(
+        snap.receipt_edits[1].related_receipt_id.as_deref(),
+        Some("FIRST")
+    );
+
+    let backup = export_backup(&store).unwrap().to_bytes().unwrap();
+    let empty = Store::open_in_memory().unwrap();
+    assert_eq!(
+        preview_import(&empty, &backup).unwrap().incoming_receipts,
+        2
+    );
+}
+
+#[test]
+fn separate_purchase_rejects_default_or_colliding_identity() {
+    let source = "DATE 2026-10-03\nMILK 2% 1 GAL 4.29\nSUBTOTAL 4.29\nTAX 0.00\nTOTAL 4.29";
+    let mut store = Store::open_in_memory().unwrap();
+    let first = parse_text(source);
+    confirm_receipt(&mut store, review(first.clone()).unwrap()).unwrap();
+    assert!(confirm_separate_purchase(&mut store, review(first.clone()).unwrap()).is_err());
+    let mut colliding_lines = first;
+    colliding_lines.id = "NEW".into();
+    assert!(confirm_separate_purchase(&mut store, review(colliding_lines).unwrap()).is_err());
     assert_eq!(snapshot(&store).unwrap().receipt_count, 1);
 }
 

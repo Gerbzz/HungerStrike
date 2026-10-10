@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -90,7 +90,7 @@ fn validate_state(state: &State) -> Result<(), String> {
         return Err("invalid budget in backup".into());
     }
     let mut receipt_ids = HashSet::new();
-    let mut source_hashes = HashSet::new();
+    let mut source_hashes = HashMap::new();
     for receipt in &state.receipts {
         if receipt.items.iter().any(|item| !item.raw.is_empty())
             || !receipt.unallocated_adjustments.is_empty()
@@ -101,10 +101,19 @@ fn validate_state(state: &State) -> Result<(), String> {
         if checked.draft.known_subtotal_cents != receipt.known_subtotal_cents {
             return Err("backup receipt accounting is not canonical".into());
         }
-        if !receipt_ids.insert(receipt.id.as_str())
-            || !source_hashes.insert(receipt.source_sha256.as_str())
-        {
+        if !receipt_ids.insert(receipt.id.as_str()) {
             return Err("duplicate receipt in backup".into());
+        }
+        if let Some(first_id) = source_hashes.get(receipt.source_sha256.as_str()) {
+            if !state.receipt_edits.iter().any(|edit| {
+                edit.receipt_id == receipt.id
+                    && edit.action == "separate_purchase_confirmed"
+                    && edit.related_receipt_id.as_deref() == Some(*first_id)
+            }) {
+                return Err("matching receipt source lacks separate-purchase audit".into());
+            }
+        } else {
+            source_hashes.insert(receipt.source_sha256.as_str(), receipt.id.as_str());
         }
     }
     let mut lot_ids = HashSet::new();
@@ -148,10 +157,14 @@ pub fn preview_import(store: &Store, bytes: &[u8]) -> Result<ImportPreview, Stri
         if existing
             .receipts
             .iter()
-            .any(|old| old.source_sha256 == receipt.source_sha256)
+            .any(|old| old.id == receipt.id && old.source_sha256 == receipt.source_sha256)
         {
             duplicate_receipts += 1;
-        } else if existing.receipts.iter().any(|old| old.id == receipt.id) {
+        } else if existing
+            .receipts
+            .iter()
+            .any(|old| old.id == receipt.id || old.source_sha256 == receipt.source_sha256)
+        {
             conflicting_identifiers += 1;
         }
     }
@@ -184,10 +197,9 @@ pub fn apply_import(
                 .receipts
                 .iter()
                 .filter(|receipt| {
-                    existing
-                        .receipts
-                        .iter()
-                        .any(|old| old.source_sha256 == receipt.source_sha256)
+                    existing.receipts.iter().any(|old| {
+                        old.id == receipt.id && old.source_sha256 == receipt.source_sha256
+                    })
                 })
                 .count();
             if overlap == incoming.receipts.len() {
@@ -196,12 +208,16 @@ pub fn apply_import(
             if overlap > 0 {
                 return Err("partial receipt overlap needs explicit replacement".into());
             }
-            if incoming
-                .receipts
-                .iter()
-                .any(|receipt| existing.receipts.iter().any(|old| old.id == receipt.id))
-            {
-                return Err("receipt identifier conflict".into());
+            if incoming.receipts.iter().any(|receipt| {
+                existing
+                    .receipts
+                    .iter()
+                    .any(|old| old.id == receipt.id || old.source_sha256 == receipt.source_sha256)
+            }) {
+                return Err(
+                    "receipt identifier or source conflict; use explicit replacement after review"
+                        .into(),
+                );
             }
             if incoming
                 .lots
