@@ -1,0 +1,59 @@
+{
+  "label": "SYNTHETIC TEST DATA — ORIGINAL TEST RECIPES",
+  "version": 1,
+  "notes": "Original simple test recipes only. No scraped or licensed recipe collection, nutrition calculation, or medical claim.",
+  "recipes": [
+    {
+      "id": "egg-spinach-scramble",
+      "name": "Egg and spinach scramble",
+      "servings": 1,
+      "ingredients": [
+        {"name":"large eggs","quantity":"2","unit":"egg"},
+        {"name":"spinach","quantity":"1","unit":"oz"}
+      ],
+      "steps": ["Beat the eggs.", "Cook the eggs with spinach until set."],
+      "expected_with_confirmed_fixture_stock": "available",
+      "expected_estimate_cents_after_fixture_events": 118,
+      "estimate_status": "complete"
+    },
+    {
+      "id": "apple-yogurt-bowl",
+      "name": "Apple and yogurt bowl",
+      "servings": 1,
+      "ingredients": [
+        {"name":"apples","quantity":"0.25","unit":"lb"},
+        {"name":"yogurt","quantity":"1","unit":"each"}
+      ],
+      "steps": ["Slice the apple.", "Serve with yogurt."],
+      "expected_with_confirmed_fixture_stock": "available",
+      "expected_estimate_cents_after_fixture_events": 137,
+      "estimate_status": "complete"
+    },
+    {
+      "id": "tomato-pasta",
+      "name": "Tomato pasta",
+      "servings": 1,
+      "ingredients": [
+        {"name":"pasta","quantity":"1","unit":"each"},
+        {"name":"tomatoes","quantity":"0.25","unit":"lb"}
+      ],
+      "steps": ["Cook the pasta.", "Warm chopped tomato and combine with pasta."],
+      "expected_with_confirmed_fixture_stock": "missing_tomatoes_R003_unconfirmed",
+      "expected_estimate_cents_after_fixture_events": 90,
+      "estimate_status": "partial_missing_ingredient"
+    },
+    {
+      "id": "chicken-rice-skillet",
+      "name": "Chicken and rice skillet",
+      "servings": 1,
+      "ingredients": [
+        {"name":"chicken breast","quantity":"0.50","unit":"lb"},
+        {"name":"rice","quantity":"0.25","unit":"lb"}
+      ],
+      "steps": ["Cook the rice.", "Cook chicken thoroughly and serve with rice."],
+      "expected_with_confirmed_fixture_stock": "missing_chicken_R003_unconfirmed",
+      "expected_estimate_cents_after_fixture_events": 47,
+      "estimate_status": "partial_missing_ingredient"
+    }
+  ]
+}

@@ -34,3 +34,14 @@ describe("fixed kitchen and accessible inventory", () => {
     expect(zoneFromHitName("zone-pantry")).toBe("pantry");
   });
 });
+
+it("offers keyboard-operable consume and discard controls with explicit quantities", () => {
+  const root = document.createElement("div");
+  const actions: Array<[string, string, string]> = [];
+  renderInventoryList(root, lots, () => {}, (id, kind, quantity) => actions.push([id, kind, quantity]));
+  const first = root.querySelector<HTMLElement>('li[data-lot-id="R001-L03"]')!;
+  const amount = first.querySelector<HTMLInputElement>('input[name="action-quantity"]')!;
+  amount.value = "0.5";
+  first.querySelector<HTMLButtonElement>('button[data-action="discard"]')!.click();
+  expect(actions).toEqual([["R001-L03", "discard", "0.5"]]);
+});

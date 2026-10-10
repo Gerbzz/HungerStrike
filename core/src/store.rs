@@ -3,7 +3,7 @@ use std::path::Path;
 use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 
-use crate::model::{LotView, ReceiptDraft};
+use crate::model::{CategoryEdit, LotView, ReceiptDraft};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct CostEvent {
@@ -18,6 +18,12 @@ pub(crate) struct State {
     pub lots: Vec<LotView>,
     pub cost_events: Vec<CostEvent>,
     pub refund_without_stock_reversal_cents: i64,
+    #[serde(default)]
+    pub weekly_budget_cents: Option<i64>,
+    #[serde(default)]
+    pub monthly_budget_cents: Option<i64>,
+    #[serde(default)]
+    pub category_edits: Vec<CategoryEdit>,
 }
 
 impl Default for State {
@@ -28,6 +34,9 @@ impl Default for State {
             lots: Vec::new(),
             cost_events: Vec::new(),
             refund_without_stock_reversal_cents: 0,
+            weekly_budget_cents: None,
+            monthly_budget_cents: None,
+            category_edits: Vec::new(),
         }
     }
 }

@@ -82,3 +82,10 @@ fn corrected_fields_can_resolve_source_uncertainty_without_losing_raw_evidence()
     assert!(reviewed.draft.items[0].raw.contains("BANANAS"));
     assert!(!reviewed.draft.uncertainty.is_empty());
 }
+
+#[test]
+fn invalid_purchase_date_cannot_enter_budget_history() {
+    let mut draft = parse_text(&fixture("R001-purchase.txt"));
+    draft.purchase_date = Some("2026-99-99".into());
+    assert!(review(draft).is_err());
+}

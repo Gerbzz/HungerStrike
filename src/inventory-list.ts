@@ -10,7 +10,8 @@ export type Lot = {
 export function renderInventoryList(
   root: HTMLElement,
   lots: Lot[],
-  onMove: (id: string, zone: string) => void
+  onMove: (id: string, zone: string) => void,
+  onAdjust?: (id: string, kind: "consume" | "discard", quantity: string) => void
 ): void {
   root.replaceChildren();
   const section = document.createElement("section");
@@ -38,6 +39,25 @@ export function renderInventoryList(
     select.addEventListener("change", () => onMove(lot.id, select.value));
     label.append(select);
     item.append(summary, label);
+    if (onAdjust) {
+      const controls = document.createElement("div"); controls.className = "stock-actions";
+      const quantityLabel = document.createElement("label");
+      quantityLabel.textContent = `Amount of ${lot.name} (${lot.unit}) `;
+      const quantity = document.createElement("input");
+      quantity.name = "action-quantity"; quantity.type = "number"; quantity.min = "0.001";
+      quantity.step = "any"; quantity.value = "1";
+      quantityLabel.append(quantity); controls.append(quantityLabel);
+      for (const kind of ["consume", "discard"] as const) {
+        const button = document.createElement("button"); button.type = "button";
+        button.dataset.action = kind;
+        button.textContent = kind === "consume" ? "Use" : "Discard";
+        button.addEventListener("click", () => {
+          if (Number(quantity.value) > 0) onAdjust(lot.id, kind, quantity.value);
+        });
+        controls.append(button);
+      }
+      item.append(controls);
+    }
     list.append(item);
   }
   if (lots.length === 0) {

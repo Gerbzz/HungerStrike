@@ -109,4 +109,24 @@ pub struct AppSnapshot {
     pub remaining_food_cost_cents: i64,
     pub refund_without_stock_reversal_cents: i64,
     pub lots: Vec<LotView>,
+    pub receipt_items: Vec<ReceiptItemView>,
+    pub category_edits: Vec<CategoryEdit>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ReceiptItemView {
+    pub receipt_id: String,
+    pub line_id: String,
+    pub name: String,
+    pub category: String,
+    pub net_cents: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CategoryEdit {
+    pub sequence: usize,
+    pub receipt_id: String,
+    pub line_id: String,
+    pub from: String,
+    pub to: String,
 }

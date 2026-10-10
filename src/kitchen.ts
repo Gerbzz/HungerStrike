@@ -2,6 +2,8 @@ import type { Lot } from "./inventory-list";
 import { renderInventoryList } from "./inventory-list";
 import * as THREE from "three";
 
+const renderers = new WeakMap<HTMLElement, THREE.WebGLRenderer>();
+
 export function zoneFromHitName(name: string): string | null {
   return ["zone-fridge", "zone-freezer", "zone-pantry"].includes(name)
     ? name.slice(5)
@@ -14,6 +16,8 @@ export function renderKitchen(
   onZone: (zone: string) => void,
   webglAvailable = true
 ): "3d" | "list" {
+  renderers.get(root)?.dispose();
+  renderers.delete(root);
   root.replaceChildren();
   const fallback = () => {
     const note = document.createElement("p");
@@ -32,6 +36,7 @@ export function renderKitchen(
   } catch {
     return fallback();
   }
+  renderers.set(root, renderer);
   const width = Math.max(root.clientWidth, 500);
   const height = 310;
   renderer.setSize(width, height);

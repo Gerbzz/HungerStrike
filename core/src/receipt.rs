@@ -234,7 +234,11 @@ pub fn review(draft: ReceiptDraft) -> Result<ReviewedReceipt, ReviewError> {
         sum.checked_add(refund.amount_cents)
     });
     if draft.id.trim().is_empty()
-        || draft.purchase_date.is_none()
+        || draft
+            .purchase_date
+            .as_deref()
+            .and_then(|date| chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+            .is_none()
         || !draft.unallocated_adjustments.is_empty()
         || item_total.and_then(|n| refund_total.and_then(|r| n.checked_add(r)))
             != draft.printed_subtotal_cents

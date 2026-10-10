@@ -20,7 +20,11 @@ fn main() {
             commands::scan_photo,
             commands::confirm_reviewed,
             commands::get_snapshot,
-            commands::inventory_action
+            commands::inventory_action,
+            commands::get_meals,
+            commands::get_budget,
+            commands::save_budget,
+            commands::edit_category
         ])
         .run(tauri::generate_context!())
         .expect("HungerStrike could not start");

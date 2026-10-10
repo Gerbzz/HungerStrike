@@ -2,12 +2,12 @@ use rust_decimal::Decimal;
 
 use crate::{
     inventory::{allocated_cost, decimal},
-    model::{AppSnapshot, ConfirmOutcome, LotView, ReviewedReceipt},
+    model::{AppSnapshot, CategoryEdit, ConfirmOutcome, LotView, ReceiptItemView, ReviewedReceipt},
     receipt::review,
     store::Store,
 };
 
-fn default_zone(category: &str) -> &'static str {
+pub(crate) fn default_zone(category: &str) -> &'static str {
     match category {
         "food.dairy" | "food.produce" => "fridge",
         "food.meat" => "freezer",
@@ -149,6 +149,19 @@ pub fn snapshot(store: &Store) -> Result<AppSnapshot, String> {
         .filter(|lot| lot.category.starts_with("food."))
         .map(|lot| lot.remaining_cost_cents)
         .sum();
+    let receipt_items = state
+        .receipts
+        .iter()
+        .flat_map(|receipt| {
+            receipt.items.iter().map(|item| ReceiptItemView {
+                receipt_id: receipt.id.clone(),
+                line_id: item.line_id.clone(),
+                name: item.name.clone(),
+                category: item.category.clone(),
+                net_cents: item.net_cents.unwrap_or(0),
+            })
+        })
+        .collect();
     Ok(AppSnapshot {
         receipt_count: state.receipts.len(),
         cash_flow_cents,
@@ -160,5 +173,91 @@ pub fn snapshot(store: &Store) -> Result<AppSnapshot, String> {
         remaining_food_cost_cents,
         refund_without_stock_reversal_cents: state.refund_without_stock_reversal_cents,
         lots: state.lots,
+        receipt_items,
+        category_edits: state.category_edits,
     })
+}
+
+pub fn recategorize_item(store: &mut Store, line_id: &str, category: &str) -> Result<(), String> {
+    let new_is_food = category.starts_with("food.");
+    if !new_is_food && !category.starts_with("household.") {
+        return Err("category must begin food. or household.".into());
+    }
+    let mut state = store.load()?;
+    let (receipt_index, item_index) = state
+        .receipts
+        .iter()
+        .enumerate()
+        .find_map(|(ri, receipt)| {
+            receipt
+                .items
+                .iter()
+                .position(|item| item.line_id == line_id)
+                .map(|ii| (ri, ii))
+        })
+        .ok_or("receipt item not found")?;
+    let receipt_id = state.receipts[receipt_index].id.clone();
+    let purchase_date = state.receipts[receipt_index]
+        .purchase_date
+        .clone()
+        .ok_or("purchase date missing")?;
+    let item = state.receipts[receipt_index].items[item_index].clone();
+    if item.category == category {
+        return Ok(());
+    }
+    let old_is_food = item.category.starts_with("food.");
+    if old_is_food && !new_is_food {
+        if state
+            .receipts
+            .iter()
+            .flat_map(|receipt| &receipt.refunds)
+            .any(|refund| refund.original_line_id.as_deref() == Some(line_id))
+        {
+            return Err("cannot change category after a linked refund".into());
+        }
+        let index = state
+            .lots
+            .iter()
+            .position(|lot| lot.id == line_id)
+            .ok_or("food lot missing")?;
+        let lot = &state.lots[index];
+        if decimal(&lot.quantity)? != decimal(item.quantity.as_deref().ok_or("quantity missing")?)?
+            || lot.remaining_cost_cents != item.net_cents.ok_or("cost missing")?
+        {
+            return Err("cannot change food category after stock use or adjustment".into());
+        }
+        state.lots.remove(index);
+    } else if !old_is_food && new_is_food {
+        if state.lots.iter().any(|lot| lot.id == line_id) {
+            return Err("lot identifier already exists".into());
+        }
+        state.lots.push(LotView {
+            id: item.line_id.clone(),
+            source_receipt_id: receipt_id.clone(),
+            name: item.name.clone(),
+            category: category.into(),
+            quantity: item.quantity.clone().ok_or("quantity missing")?,
+            unit: item.unit.clone().ok_or("unit missing")?,
+            remaining_cost_cents: item.net_cents.ok_or("cost missing")?,
+            zone: default_zone(category).into(),
+            expiry_date: item.expiry_date.clone(),
+            purchase_date,
+        });
+    } else if old_is_food {
+        let lot = state
+            .lots
+            .iter_mut()
+            .find(|lot| lot.id == line_id)
+            .ok_or("food lot missing")?;
+        lot.category = category.into();
+    }
+    state.receipts[receipt_index].items[item_index].category = category.into();
+    state.category_edits.push(CategoryEdit {
+        sequence: state.category_edits.len() + 1,
+        receipt_id,
+        line_id: line_id.into(),
+        from: item.category,
+        to: category.into(),
+    });
+    store.save(&state)
 }

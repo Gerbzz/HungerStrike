@@ -56,6 +56,24 @@ export type SnapshotDto = {
     expiry_date: string | null;
     purchase_date: string;
   }>;
+  receipt_items: Array<{ receipt_id: string; line_id: string; name: string; category: string; net_cents: number }>;
+  category_edits: Array<{ sequence: number; receipt_id: string; line_id: string; from: string; to: string }>;
+};
+
+export type MealDto = {
+  id: string; name: string; servings: number; steps: string[]; available: boolean;
+  estimate_cents: number | null; estimate_status: string;
+  ingredients: Array<{ name: string; required_quantity: string; unit: string; stock_used_quantity: string; estimated_cost_cents: number; missing_quantity: string }>;
+  soon_expiring: string[]; expiry_unknown: boolean;
+};
+
+export type PeriodDto = "week" | "month";
+export type BudgetDto = {
+  period: PeriodDto; start_date: string; end_date: string; receipt_count: number;
+  budget_cents: number | null; remaining_budget_cents: number | null;
+  cash_flow_cents: number; food_spending_cents: number; household_goods_cents: number;
+  tax_cents: number; gross_items_cents: number; discounts_cents: number;
+  refunds_cents: number; reconciliation_cents: number;
 };
 
 export type InventoryActionDto =
@@ -68,6 +86,10 @@ export interface AppApi {
   confirm(draft: ReceiptDraftDto): Promise<"accepted" | "duplicate">;
   getSnapshot(): Promise<SnapshotDto>;
   action(action: InventoryActionDto): Promise<SnapshotDto>;
+  meals(today: string): Promise<MealDto[]>;
+  budget(referenceDate: string, period: PeriodDto, weekStart: number): Promise<BudgetDto>;
+  saveBudget(period: PeriodDto, cents: number | null): Promise<void>;
+  editCategory(lineId: string, category: string): Promise<SnapshotDto>;
 }
 
 export const tauriApi: AppApi = {
@@ -76,4 +98,8 @@ export const tauriApi: AppApi = {
   confirm: (reviewed) => invoke("confirm_reviewed", { reviewed }),
   getSnapshot: () => invoke("get_snapshot"),
   action: (action) => invoke("inventory_action", { action })
+  ,meals: (today) => invoke("get_meals", { today })
+  ,budget: (referenceDate, period, weekStart) => invoke("get_budget", { referenceDate, period, weekStart })
+  ,saveBudget: (period, cents) => invoke("save_budget", { period, cents })
+  ,editCategory: (lineId, category) => invoke("edit_category", { lineId, category })
 };
