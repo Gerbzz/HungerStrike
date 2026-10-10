@@ -124,13 +124,10 @@ pub fn snapshot(store: &Store) -> Result<AppSnapshot, String> {
             }
         }
         for refund in &receipt.refunds {
-            if refund
-                .original_line_id
-                .as_ref()
-                .and_then(|id| state.lots.iter().find(|lot| &lot.id == id))
-                .is_some_and(|lot| lot.category.starts_with("food."))
-            {
+            if refund.category.starts_with("food.") {
                 food_spending_cents += refund.amount_cents;
+            } else if refund.category.starts_with("household.") {
+                household_goods_cents += refund.amount_cents;
             }
         }
     }

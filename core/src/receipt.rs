@@ -99,9 +99,10 @@ pub fn parse_text(raw: &str) -> ReceiptDraft {
         } else if line.starts_with("RETURN ") {
             let amount = final_amount(line).unwrap_or(0);
             let (quantity, unit) = quantity_and_unit(line);
-            let (name, _) = name_category(line.trim_start_matches("RETURN "));
+            let (name, category) = name_category(line.trim_start_matches("RETURN "));
             draft.refunds.push(RefundLine {
                 name: name.to_string(),
+                category: category.to_string(),
                 quantity,
                 unit,
                 amount_cents: amount,
@@ -210,6 +211,10 @@ pub fn review(draft: ReceiptDraft) -> Result<ReviewedReceipt, ReviewError> {
         || draft.id.is_empty()
         || draft.purchase_date.is_none()
         || !draft.unallocated_adjustments.is_empty()
+        || draft
+            .refunds
+            .iter()
+            .any(|refund| refund.category == "unclassified")
         || item_total.and_then(|n| n.checked_add(refund_total)) != draft.printed_subtotal_cents
         || draft
             .printed_subtotal_cents

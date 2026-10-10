@@ -122,6 +122,26 @@ fn refund_after_consumption_does_not_remove_unavailable_stock() {
 }
 
 #[test]
+fn unlinked_refund_still_reduces_food_spending_without_changing_stock() {
+    let mut store = Store::open_in_memory().unwrap();
+    confirm_receipt(&mut store, r001()).unwrap();
+    let refund = review(parse_text(&fixture("R002-refund.txt"))).unwrap();
+    confirm_receipt(&mut store, refund).unwrap();
+    let state = snapshot(&store).unwrap();
+    assert_eq!(state.food_spending_cents, 1711);
+    assert_eq!(state.refund_without_stock_reversal_cents, -429);
+    assert_eq!(
+        state
+            .lots
+            .iter()
+            .find(|x| x.id == "R001-L02")
+            .unwrap()
+            .quantity,
+        "1"
+    );
+}
+
+#[test]
 fn invalid_refund_reversal_rolls_back_entire_receipt() {
     let mut store = Store::open_in_memory().unwrap();
     confirm_receipt(&mut store, r001()).unwrap();

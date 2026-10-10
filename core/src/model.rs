@@ -25,6 +25,7 @@ pub struct DraftItem {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RefundLine {
     pub name: String,
+    pub category: String,
     pub quantity: Option<String>,
     pub unit: Option<String>,
     pub amount_cents: i64,
