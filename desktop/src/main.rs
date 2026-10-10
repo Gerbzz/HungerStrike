@@ -581,4 +581,141 @@ mod tests {
         target.dispatch(AppAction::UndoBackup).unwrap();
         assert_eq!(target.snapshot.receipt_count, 0);
     }
+
+    #[cfg(windows)]
+    #[test]
+    fn actual_image_ocr_requires_review_and_duplicate_photo_does_not_double_spend() {
+        if !ocr::installed_engine().is_file() {
+            eprintln!("local image acceptance skipped: English Tesseract is not installed");
+            return;
+        }
+        fn load_photo(state: &mut AppState, bytes: &[u8]) {
+            state.dispatch(AppAction::StartOcr(bytes.to_vec())).unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+            while state.ocr_task.is_some() {
+                state.poll_ocr();
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "OCR worker did not finish"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        }
+        let clean = include_bytes!("../../tests/images/synthetic-clean.png");
+        let mut state =
+            AppState::new(Store::open_in_memory().unwrap(), "2026-10-03".into()).unwrap();
+        load_photo(&mut state, clean);
+        let draft = state.draft.as_ref().expect("clean OCR returns review text");
+        assert_eq!(draft.items.len(), 6);
+        assert_eq!(
+            (
+                draft.printed_subtotal_cents,
+                draft.printed_tax_cents,
+                draft.printed_total_cents
+            ),
+            (Some(1741), Some(28), Some(1769))
+        );
+        assert_eq!(
+            draft
+                .items
+                .iter()
+                .find(|item| item.name == "pasta")
+                .unwrap()
+                .quantity
+                .as_deref(),
+            Some("2")
+        );
+        assert!(
+            review(draft.clone()).is_err(),
+            "uncertain OCR fields must require correction"
+        );
+        assert!(state
+            .dispatch(AppAction::Commit(ReceiptCommit::New))
+            .is_err());
+        assert_eq!(state.snapshot.receipt_count, 0);
+
+        fn repair_clean_draft(state: &mut AppState) {
+            let draft = state.draft.as_mut().unwrap();
+            draft.id = "IMAGE-R001".into();
+            draft.purchase_date = Some("2026-10-03".into());
+            for (index, item) in draft.items.iter_mut().enumerate() {
+                item.line_id = format!("IMAGE-R001-L{:02}", index + 1);
+            }
+            let soap = draft
+                .items
+                .iter_mut()
+                .find(|item| item.name == "dish soap")
+                .unwrap();
+            soap.quantity = Some("1".into());
+            soap.unit = Some("bottle".into());
+            assert!(
+                review(draft.clone()).is_ok(),
+                "corrected synthetic photo must reconcile"
+            );
+        }
+        repair_clean_draft(&mut state);
+        state
+            .dispatch(AppAction::Commit(ReceiptCommit::New))
+            .unwrap();
+        assert_eq!(
+            (state.snapshot.receipt_count, state.snapshot.cash_flow_cents),
+            (1, 1769)
+        );
+        load_photo(&mut state, &clean.to_vec());
+        assert!(state.source_match.is_some());
+        repair_clean_draft(&mut state);
+        state
+            .dispatch(AppAction::Commit(ReceiptCommit::New))
+            .unwrap();
+        assert_eq!(state.message, "Receipt: Duplicate");
+        assert_eq!(
+            (state.snapshot.receipt_count, state.snapshot.cash_flow_cents),
+            (1, 1769)
+        );
+
+        for (name, bytes) in [
+            (
+                "blurred",
+                include_bytes!("../../tests/images/synthetic-blurred.png").as_slice(),
+            ),
+            (
+                "tilted",
+                include_bytes!("../../tests/images/synthetic-tilted.png").as_slice(),
+            ),
+            (
+                "cropped",
+                include_bytes!("../../tests/images/synthetic-cropped.png").as_slice(),
+            ),
+        ] {
+            let mut scratch =
+                AppState::new(Store::open_in_memory().unwrap(), "2026-10-03".into()).unwrap();
+            load_photo(&mut scratch, bytes);
+            if let Some(draft) = scratch.draft.clone() {
+                assert!(
+                    review(draft).is_err(),
+                    "{name} OCR damage must stay unresolved"
+                );
+                assert!(scratch
+                    .dispatch(AppAction::Commit(ReceiptCommit::New))
+                    .is_err());
+            }
+            assert_eq!(
+                scratch.snapshot.receipt_count, 0,
+                "{name} must not write stock"
+            );
+            assert_eq!(
+                scratch.snapshot.cash_flow_cents, 0,
+                "{name} must not write spending"
+            );
+        }
+        let mut cancelled =
+            AppState::new(Store::open_in_memory().unwrap(), "2026-10-03".into()).unwrap();
+        cancelled
+            .dispatch(AppAction::StartOcr(clean.to_vec()))
+            .unwrap();
+        cancelled.dispatch(AppAction::CancelReceipt).unwrap();
+        assert!(cancelled.ocr_task.is_none());
+        assert!(cancelled.draft.is_none());
+        assert_eq!(cancelled.snapshot.receipt_count, 0);
+    }
 }

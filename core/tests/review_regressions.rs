@@ -73,6 +73,33 @@ fn short_quantity_first_line_is_visible_for_manual_resolution() {
 }
 
 #[test]
+fn glued_at_price_quantity_is_recognized_without_guessing_a_unit() {
+    let draft = parse_text(
+        "DATE 2026-10-03\nPASTA 2@1.79 3.58\nPASTA DISC -1.79\nSUBTOTAL 1.79\nTAX 0.00\nTOTAL 1.79",
+    );
+    assert_eq!(draft.items.len(), 1);
+    assert_eq!(draft.items[0].name, "pasta");
+    assert_eq!(draft.items[0].quantity.as_deref(), Some("2"));
+    assert_eq!(draft.items[0].unit.as_deref(), Some("each"));
+    assert_eq!(draft.items[0].net_cents, Some(179));
+    assert!(review(draft).is_ok());
+}
+
+#[test]
+fn ambiguous_short_ocr_label_never_receives_an_unrelated_discount() {
+    let draft = parse_text(
+        "DATE 2026-10-03\nC 2% 1 GAL 4.29\nFA BOGO DISC -1.79\nSUBTOTAL 2.50\nTAX 0.00\nTOTAL 2.50",
+    );
+    assert_eq!(draft.items[0].net_cents, Some(429));
+    assert_eq!(draft.unallocated_adjustments.len(), 1);
+    assert!(draft
+        .uncertainty
+        .iter()
+        .any(|flag| flag == "unallocated discount"));
+    assert!(review(draft).is_err());
+}
+
+#[test]
 fn common_dollar_amounts_and_unfamiliar_product_remain_reviewable() {
     let draft = parse_text(
         "MARKET\nDATE 2026-10-03\nBREAD 1 EA $3.49\nSUBTOTAL $3.49\nTAX $0.00\nTOTAL $3.49",

@@ -31,6 +31,17 @@ fn final_amount(line: &str) -> Option<i64> {
     line.split_whitespace().last().and_then(cents)
 }
 
+fn glued_quantity(token: &str) -> Option<&str> {
+    let (quantity, unit_price) = token.split_once('@')?;
+    if quantity.parse::<rust_decimal::Decimal>().ok()? > rust_decimal::Decimal::ZERO
+        && cents(unit_price).is_some()
+    {
+        Some(quantity)
+    } else {
+        None
+    }
+}
+
 fn quantity_and_unit(line: &str) -> (Option<String>, Option<String>) {
     let words: Vec<&str> = line.split_whitespace().collect();
     for pair in words.windows(2) {
@@ -50,6 +61,9 @@ fn quantity_and_unit(line: &str) -> (Option<String>, Option<String>) {
         };
         return (Some(quantity.to_string()), Some(unit.to_string()));
     }
+    if let Some(quantity) = words.iter().find_map(|word| glued_quantity(word)) {
+        return (Some(quantity.to_string()), Some("each".into()));
+    }
     if let Some(first) = words.first() {
         let number = first.trim_end_matches(['x', 'X']);
         if number.parse::<rust_decimal::Decimal>().is_ok() && words.len() > 1 {
@@ -61,7 +75,13 @@ fn quantity_and_unit(line: &str) -> (Option<String>, Option<String>) {
 
 fn name_category(line: &str) -> (String, String) {
     let words: Vec<&str> = line.split_whitespace().collect();
-    let start = if words.first().is_some_and(|word| {
+    let start = if words
+        .first()
+        .and_then(|word| glued_quantity(word))
+        .is_some()
+    {
+        1
+    } else if words.first().is_some_and(|word| {
         word.trim_end_matches(['x', 'X'])
             .parse::<rust_decimal::Decimal>()
             .is_ok()
@@ -78,6 +98,11 @@ fn name_category(line: &str) -> (String, String) {
                 } else {
                     2
                 }
+            }
+            Some(unit)
+                if unit.starts_with('@') && cents(unit.trim_start_matches('@')).is_some() =>
+            {
+                2
             }
             _ => 1,
         }
@@ -109,7 +134,11 @@ fn name_category(line: &str) -> (String, String) {
     let words: Vec<&str> = product.split_whitespace().collect();
     let end = words
         .iter()
-        .position(|word| word.parse::<rust_decimal::Decimal>().is_ok() || *word == "??")
+        .position(|word| {
+            word.parse::<rust_decimal::Decimal>().is_ok()
+                || *word == "??"
+                || glued_quantity(word).is_some()
+        })
         .unwrap_or_else(|| words.len().saturating_sub(1));
     (
         words[..end].join(" ").to_ascii_lowercase(),
@@ -247,15 +276,19 @@ pub fn parse_text(raw: &str) -> ReceiptDraft {
         } else if upper.contains(" DISC") {
             let amount = final_amount(line);
             let target = draft.items.iter_mut().rev().find(|item| {
-                upper.contains(&item.name.to_ascii_uppercase())
-                    || upper.contains(
-                        &item
-                            .raw
-                            .split_whitespace()
-                            .find(|word| word.chars().any(|c| c.is_ascii_alphabetic()))
-                            .unwrap_or("~")
-                            .to_ascii_uppercase(),
-                    )
+                let name = item.name.trim().to_ascii_uppercase();
+                let named_match = name.len() >= 3 && upper.contains(&name);
+                let raw_token = item.raw.split_whitespace().find_map(|word| {
+                    let cleaned = word.trim_matches(|c: char| !c.is_ascii_alphanumeric());
+                    (cleaned.len() >= 3 && cleaned.chars().any(|c| c.is_ascii_alphabetic()))
+                        .then(|| cleaned.to_ascii_uppercase())
+                });
+                named_match
+                    || raw_token.is_some_and(|token| {
+                        upper.split_whitespace().any(|word| {
+                            word.trim_matches(|c: char| !c.is_ascii_alphanumeric()) == token
+                        })
+                    })
             });
             if let (Some(amount), Some(item)) = (amount, target) {
                 item.discount_cents = item.discount_cents.checked_add(amount).unwrap_or(i64::MAX);

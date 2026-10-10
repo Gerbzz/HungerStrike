@@ -189,6 +189,7 @@ pub fn extract_local_image(bytes: &[u8], engine: &Path) -> Result<String, OcrErr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hungerstrike_core::{parse_text, review};
 
     #[test]
     fn missing_engine_returns_manual_fallback_signal() {
@@ -227,6 +228,46 @@ mod tests {
         let text = extract_local_image(image, &engine).unwrap();
         assert!(text.contains("SUBTOTAL"));
         assert!(text.contains("TOTAL"));
+    }
+
+    #[test]
+    fn local_image_matrix_acceptance_probe() {
+        let engine = installed_engine();
+        if !engine.is_file() {
+            eprintln!("local OCR matrix skipped: English Tesseract is not installed");
+            return;
+        }
+        for (name, bytes) in [
+            (
+                "clean",
+                include_bytes!("../../tests/images/synthetic-clean.png").as_slice(),
+            ),
+            (
+                "blurred",
+                include_bytes!("../../tests/images/synthetic-blurred.png").as_slice(),
+            ),
+            (
+                "tilted",
+                include_bytes!("../../tests/images/synthetic-tilted.png").as_slice(),
+            ),
+            (
+                "cropped",
+                include_bytes!("../../tests/images/synthetic-cropped.png").as_slice(),
+            ),
+        ] {
+            match extract_local_image(bytes, &engine) {
+                Ok(text) => {
+                    let draft = parse_text(&text);
+                    eprintln!("OCR {name}: {:?}", text);
+                    eprintln!("PARSE {name}: id={} date={:?} items={:?} subtotal={:?}/{:?} tax={:?} total={:?} uncertainty={:?} review={}",
+                        draft.id, draft.purchase_date,
+                        draft.items.iter().map(|item| (&item.name, &item.quantity, &item.unit, &item.net_cents, &item.category)).collect::<Vec<_>>(),
+                        draft.known_subtotal_cents, draft.printed_subtotal_cents, draft.printed_tax_cents, draft.printed_total_cents,
+                        draft.uncertainty, review(draft.clone()).is_ok());
+                }
+                Err(error) => eprintln!("OCR {name}: {error}"),
+            }
+        }
     }
 
     #[cfg(windows)]
