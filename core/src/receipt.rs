@@ -200,22 +200,45 @@ pub fn parse_text(raw: &str) -> ReceiptDraft {
 
 pub fn review(draft: ReceiptDraft) -> Result<ReviewedReceipt, ReviewError> {
     let item_total: Option<i64> = draft.items.iter().try_fold(0_i64, |sum, item| {
+        let gross = item.gross_cents?;
         let amount = item.net_cents?;
-        item.quantity.as_ref()?;
-        item.unit.as_ref()?;
+        let quantity = item
+            .quantity
+            .as_ref()?
+            .parse::<rust_decimal::Decimal>()
+            .ok()?;
+        if item.name.trim().is_empty()
+            || !["food.", "household."]
+                .iter()
+                .any(|prefix| item.category.starts_with(prefix))
+            || item.unit.as_ref()?.trim().is_empty()
+            || quantity <= rust_decimal::Decimal::ZERO
+            || gross < 0
+            || item.discount_cents > 0
+            || gross.checked_add(item.discount_cents)? != amount
+            || amount < 0
+        {
+            return None;
+        }
         sum.checked_add(amount)
     });
-    let refund_total: i64 = draft.refunds.iter().map(|item| item.amount_cents).sum();
-    if draft.status != DraftStatus::PendingConfirmation
-        || !draft.uncertainty.is_empty()
-        || draft.id.is_empty()
+    let refund_total: Option<i64> = draft.refunds.iter().try_fold(0_i64, |sum, refund| {
+        if refund.name.trim().is_empty()
+            || !["food.", "household."]
+                .iter()
+                .any(|prefix| refund.category.starts_with(prefix))
+            || refund.amount_cents >= 0
+        {
+            return None;
+        }
+        sum.checked_add(refund.amount_cents)
+    });
+    if draft.id.trim().is_empty()
         || draft.purchase_date.is_none()
         || !draft.unallocated_adjustments.is_empty()
-        || draft
-            .refunds
-            .iter()
-            .any(|refund| refund.category == "unclassified")
-        || item_total.and_then(|n| n.checked_add(refund_total)) != draft.printed_subtotal_cents
+        || item_total.and_then(|n| refund_total.and_then(|r| n.checked_add(r)))
+            != draft.printed_subtotal_cents
+        || draft.printed_tax_cents.is_none_or(|tax| tax < 0)
         || draft
             .printed_subtotal_cents
             .zip(draft.printed_tax_cents)
@@ -224,5 +247,7 @@ pub fn review(draft: ReceiptDraft) -> Result<ReviewedReceipt, ReviewError> {
     {
         return Err(ReviewError::NeedsResolution);
     }
+    let mut draft = draft;
+    draft.status = DraftStatus::PendingConfirmation;
     Ok(ReviewedReceipt { draft })
 }

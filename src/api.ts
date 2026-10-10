@@ -64,6 +64,7 @@ export type InventoryActionDto =
 
 export interface AppApi {
   importText(raw: string): Promise<ReceiptDraftDto>;
+  scanPhoto(bytes: number[]): Promise<{ text: string; draft: ReceiptDraftDto }>;
   confirm(draft: ReceiptDraftDto): Promise<"accepted" | "duplicate">;
   getSnapshot(): Promise<SnapshotDto>;
   action(action: InventoryActionDto): Promise<SnapshotDto>;
@@ -71,6 +72,7 @@ export interface AppApi {
 
 export const tauriApi: AppApi = {
   importText: (raw) => invoke("import_text", { raw }),
+  scanPhoto: (bytes) => invoke("scan_photo", { bytes }),
   confirm: (reviewed) => invoke("confirm_reviewed", { reviewed }),
   getSnapshot: () => invoke("get_snapshot"),
   action: (action) => invoke("inventory_action", { action })

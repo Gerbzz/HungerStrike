@@ -1,4 +1,4 @@
-import type { AppApi, SnapshotDto } from "./api";
+import type { AppApi, ReceiptDraftDto, SnapshotDto } from "./api";
 import { renderInventoryList } from "./inventory-list";
 import { renderKitchen } from "./kitchen";
 import { renderReview } from "./review";
@@ -11,8 +11,8 @@ export async function mountApp(root: HTMLElement, api: AppApi): Promise<void> {
     <main>
       <section class="panel intro"><h2>Receipt intake</h2><p>Paste receipt text, inspect every line, then confirm before any inventory or spending changes.</p>
         <label for="receipt-text">Receipt text</label><textarea id="receipt-text" name="receipt-text" rows="7" placeholder="Paste receipt text here"></textarea>
-        <div class="actions"><button type="button" data-action="import">Review receipt</button><label class="file-label">Open a text file<input type="file" accept=".txt,text/plain" name="receipt-file"></label></div>
-        <p class="hint">Photo scanning is not available in this build. You can enter or paste receipt text.</p></section>
+        <div class="actions"><button type="button" data-action="import">Review receipt</button><label class="file-label">Open a text file<input type="file" accept=".txt,text/plain" name="receipt-file"></label><label class="file-label">Scan a photo locally<input type="file" accept="image/png,image/jpeg" name="receipt-photo"></label></div>
+        <div id="photo-preview"></div><p class="hint">Photo text is a draft. Correct OCR errors before confirming. If offline OCR is unavailable, enter receipt text above.</p></section>
       <p id="app-status" class="status" role="status" aria-live="polite"></p>
       <section id="review-panel" class="panel" hidden></section>
       <section class="panel"><div class="section-heading"><div><p class="eyebrow">INVENTORY</p><h2>Kitchen</h2></div><span id="receipt-count"></span></div><div id="kitchen-view"></div><div id="inventory-view"></div></section>
@@ -59,11 +59,7 @@ export async function mountApp(root: HTMLElement, api: AppApi): Promise<void> {
     }
   };
   paint();
-  const startReview = async () => {
-    const raw = textarea.value;
-    if (!raw.trim()) { status.textContent = "Enter receipt text first."; return; }
-    try {
-      const draft = await api.importText(raw);
+  const openReview = (draft: ReceiptDraftDto, raw: string) => {
       reviewPanel.hidden = false;
       status.textContent = "Draft ready. Review and confirm to save it.";
       renderReview(reviewPanel, draft, raw, snapshot.lots, async (edited) => {
@@ -74,11 +70,49 @@ export async function mountApp(root: HTMLElement, api: AppApi): Promise<void> {
           snapshot = await api.getSnapshot(); paint();
         } catch (error) { showError(error); }
       }, () => { reviewPanel.hidden = true; reviewPanel.replaceChildren(); status.textContent = "Import cancelled. Nothing changed."; });
+  };
+  const startReview = async () => {
+    const raw = textarea.value;
+    if (!raw.trim()) { status.textContent = "Enter receipt text first."; return; }
+    try {
+      const draft = await api.importText(raw);
+      openReview(draft, raw);
     } catch (error) { showError(error); }
   };
   root.querySelector<HTMLButtonElement>("button[data-action=import]")!.addEventListener("click", startReview);
   root.querySelector<HTMLInputElement>("input[name=receipt-file]")!.addEventListener("change", async (event) => {
     const file = (event.currentTarget as HTMLInputElement).files?.[0];
     if (file) { textarea.value = await file.text(); await startReview(); }
+  });
+  let previewUrl: string | null = null;
+  root.querySelector<HTMLInputElement>("input[name=receipt-photo]")!.addEventListener("change", async (event) => {
+    const file = (event.currentTarget as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const preview = root.querySelector<HTMLElement>("#photo-preview")!;
+    preview.replaceChildren();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (typeof URL.createObjectURL === "function") {
+      previewUrl = URL.createObjectURL(file);
+      const image = document.createElement("img");
+      image.src = previewUrl;
+      image.alt = "Selected local receipt preview";
+      image.className = "photo-preview";
+      preview.append(image);
+    } else {
+      preview.textContent = `Selected photo: ${file.name}`;
+    }
+    if (file.size > 8 * 1024 * 1024 || !["image/png", "image/jpeg"].includes(file.type)) {
+      status.textContent = "Choose a PNG or JPEG photo under 8 MB.";
+      return;
+    }
+    try {
+      const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+      const result = await api.scanPhoto(bytes);
+      textarea.value = result.text;
+      openReview(result.draft, result.text);
+    } catch (error) {
+      showError(error);
+      status.textContent += " Enter the receipt text manually above.";
+    }
   });
 }

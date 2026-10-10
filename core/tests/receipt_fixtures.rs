@@ -68,3 +68,17 @@ fn review_accepts_reconciled_receipt_and_blocks_unresolved_one() {
     assert!(review(parse_text(&fixture("R001-purchase.txt"))).is_ok());
     assert!(review(parse_text(&fixture("R003-uncertain.txt"))).is_err());
 }
+
+#[test]
+fn corrected_fields_can_resolve_source_uncertainty_without_losing_raw_evidence() {
+    let mut draft = parse_text(&fixture("R001-purchase.txt"));
+    draft.status = DraftStatus::NeedsResolution;
+    draft.uncertainty.push("quantity unknown in source".into());
+    draft.items[0]
+        .uncertainty
+        .push("quantity unknown in source".into());
+    let reviewed = review(draft).unwrap();
+    assert_eq!(reviewed.draft.status, DraftStatus::PendingConfirmation);
+    assert!(reviewed.draft.items[0].raw.contains("BANANAS"));
+    assert!(!reviewed.draft.uncertainty.is_empty());
+}

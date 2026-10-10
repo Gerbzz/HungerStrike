@@ -1,4 +1,5 @@
 mod commands;
+mod ocr;
 
 use std::{fs, sync::Mutex};
 
@@ -16,6 +17,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::import_text,
+            commands::scan_photo,
             commands::confirm_reviewed,
             commands::get_snapshot,
             commands::inventory_action

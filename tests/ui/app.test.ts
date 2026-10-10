@@ -22,7 +22,7 @@ describe("local receipt workflow", () => {
     const confirm = vi.fn(async () => "accepted" as const);
     const getSnapshot = vi.fn(async () => blank);
     const root = document.createElement("div");
-    await mountApp(root, { importText, confirm, getSnapshot, action: vi.fn(async () => blank) });
+    await mountApp(root, { importText, scanPhoto: vi.fn(), confirm, getSnapshot, action: vi.fn(async () => blank) });
     (root.querySelector("textarea[name=receipt-text]") as HTMLTextAreaElement).value = "test";
     (root.querySelector("button[data-action=import]") as HTMLButtonElement).click();
     await vi.waitFor(() => expect(importText).toHaveBeenCalledWith("test"));
@@ -33,5 +33,38 @@ describe("local receipt workflow", () => {
     await vi.waitFor(() => expect(root.querySelector("button[data-action=confirm]")).not.toBeNull());
     (root.querySelector("button[data-action=confirm]") as HTMLButtonElement).click();
     await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps manual entry available when offline photo OCR is unavailable", async () => {
+    const confirm = vi.fn(async () => "accepted" as const);
+    const scanPhoto = vi.fn(async () => { throw new Error("offline OCR is unavailable"); });
+    const root = document.createElement("div");
+    await mountApp(root, { importText: vi.fn(), scanPhoto, confirm, getSnapshot: async () => blank, action: vi.fn() });
+    const input = root.querySelector<HTMLInputElement>('input[name="receipt-photo"]')!;
+    const file = new File(["fake image"], "receipt.png", { type: "image/png" });
+    file.arrayBuffer = async () => new Uint8Array([137, 80, 78, 71]).buffer;
+    Object.defineProperty(input, "files", { value: [file] });
+    input.dispatchEvent(new Event("change"));
+    await vi.waitFor(() => expect(scanPhoto).toHaveBeenCalled());
+    expect(root.querySelector("textarea[name=receipt-text]")).not.toBeNull();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(root.textContent).toContain("offline OCR is unavailable");
+  });
+
+  it("shows scanned text for review without confirming it", async () => {
+    const confirm = vi.fn(async () => "accepted" as const);
+    const root = document.createElement("div");
+    await mountApp(root, {
+      importText: vi.fn(), scanPhoto: async () => ({ text: "SYNTHETIC OCR TEXT", draft }),
+      confirm, getSnapshot: async () => blank, action: vi.fn()
+    });
+    const input = root.querySelector<HTMLInputElement>('input[name="receipt-photo"]')!;
+    const file = new File(["fake image"], "receipt.png", { type: "image/png" });
+    file.arrayBuffer = async () => new Uint8Array([137, 80, 78, 71]).buffer;
+    Object.defineProperty(input, "files", { value: [file] });
+    input.dispatchEvent(new Event("change"));
+    await vi.waitFor(() => expect(root.querySelector("button[data-action=confirm]")).not.toBeNull());
+    expect(root.textContent).toContain("SYNTHETIC OCR TEXT");
+    expect(confirm).not.toHaveBeenCalled();
   });
 });

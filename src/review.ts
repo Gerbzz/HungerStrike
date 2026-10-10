@@ -45,7 +45,13 @@ export function renderReview(
     label.append(input);
     parent.append(label);
   };
-  addField(fields, "Receipt ID", "receipt-id", draft.id, (value) => { draft.id = value; });
+  addField(fields, "Receipt ID", "receipt-id", draft.id, (value) => {
+    const old = draft.id;
+    draft.id = value;
+    for (const item of draft.items) {
+      if (item.line_id.startsWith(`${old}-`)) item.line_id = `${value}${item.line_id.slice(old.length)}`;
+    }
+  });
   addField(fields, "Purchase date", "purchase-date", draft.purchase_date ?? "", (value) => {
     draft.purchase_date = value || null;
   }, "date");
