@@ -106,6 +106,7 @@ pub fn parse_text(raw: &str) -> ReceiptDraft {
                 unit,
                 amount_cents: amount,
                 original_line_id: None,
+                inventory_quantity_to_reverse: None,
             });
             draft.known_subtotal_cents += amount;
         } else if line.contains(" DISC") {
