@@ -92,7 +92,15 @@ fn validate_state(state: &State) -> Result<(), String> {
     let mut receipt_ids = HashSet::new();
     let mut source_hashes = HashSet::new();
     for receipt in &state.receipts {
-        review(receipt.clone()).map_err(|e| e.to_string())?;
+        if receipt.items.iter().any(|item| !item.raw.is_empty())
+            || !receipt.unallocated_adjustments.is_empty()
+        {
+            return Err("backup contains raw receipt text".into());
+        }
+        let checked = review(receipt.clone()).map_err(|e| e.to_string())?;
+        if checked.draft.known_subtotal_cents != receipt.known_subtotal_cents {
+            return Err("backup receipt accounting is not canonical".into());
+        }
         if !receipt_ids.insert(receipt.id.as_str())
             || !source_hashes.insert(receipt.source_sha256.as_str())
         {
@@ -212,6 +220,10 @@ pub fn apply_import(
             for mut edit in incoming.category_edits {
                 edit.sequence = existing.category_edits.len() + 1;
                 existing.category_edits.push(edit);
+            }
+            for mut edit in incoming.receipt_edits {
+                edit.sequence = existing.receipt_edits.len() + 1;
+                existing.receipt_edits.push(edit);
             }
             if existing.weekly_budget_cents.is_none() {
                 existing.weekly_budget_cents = incoming.weekly_budget_cents;

@@ -8,7 +8,11 @@ use crate::{
 };
 
 pub(crate) fn decimal(value: &str) -> Result<Decimal, String> {
-    Decimal::from_str(value).map_err(|_| format!("invalid quantity: {value}"))
+    let parsed = Decimal::from_str(value).map_err(|_| format!("invalid quantity: {value}"))?;
+    if parsed.abs() > Decimal::from(1_000_000) {
+        return Err("quantity exceeds supported local limit".into());
+    }
+    Ok(parsed)
 }
 
 pub(crate) fn allocated_cost(cost: i64, available: Decimal, taken: Decimal) -> Result<i64, String> {
@@ -47,6 +51,9 @@ pub fn record_inventory_action(store: &mut Store, action: InventoryAction) -> Re
             state.cost_events.push(CostEvent {
                 kind: kind.to_string(),
                 amount_cents: cost,
+                cost_unknown: lot.cost_unknown,
+                lot_id: Some(lot_id),
+                quantity: Some(taken.normalize().to_string()),
             });
         }
         InventoryAction::Move { lot_id, zone } => {

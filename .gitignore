@@ -1,6 +1,2 @@
 /target
-/node_modules
-/dist
 /.superpowers
-/src-tauri/target
-/src-tauri/gen

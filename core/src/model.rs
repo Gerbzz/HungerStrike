@@ -42,6 +42,10 @@ pub struct ReceiptDraft {
     pub items: Vec<DraftItem>,
     pub refunds: Vec<RefundLine>,
     pub unallocated_adjustments: Vec<String>,
+    #[serde(default)]
+    pub unallocated_cents: Option<i64>,
+    #[serde(default)]
+    pub accepted_unknowns: bool,
     pub known_subtotal_cents: i64,
     pub printed_subtotal_cents: Option<i64>,
     pub printed_tax_cents: Option<i64>,
@@ -73,6 +77,7 @@ impl std::error::Error for ReviewError {}
 pub enum ConfirmOutcome {
     Accepted,
     Duplicate,
+    Corrected,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -92,6 +97,8 @@ pub struct LotView {
     pub quantity: String,
     pub unit: String,
     pub remaining_cost_cents: i64,
+    #[serde(default)]
+    pub cost_unknown: bool,
     pub zone: String,
     pub expiry_date: Option<String>,
     pub purchase_date: String,
@@ -106,11 +113,27 @@ pub struct AppSnapshot {
     pub tax_cents: i64,
     pub consumed_cost_cents: i64,
     pub discarded_cost_cents: i64,
+    pub unknown_consumption_count: usize,
+    pub unknown_discard_count: usize,
     pub remaining_food_cost_cents: i64,
+    pub unpriced_lot_count: usize,
     pub refund_without_stock_reversal_cents: i64,
     pub lots: Vec<LotView>,
     pub receipt_items: Vec<ReceiptItemView>,
     pub category_edits: Vec<CategoryEdit>,
+    pub receipt_edits: Vec<ReceiptEdit>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ReceiptEdit {
+    pub sequence: usize,
+    pub receipt_id: String,
+    pub action: String,
+    pub before_sha256: String,
+    pub after_sha256: String,
+    pub before_total_cents: Option<i64>,
+    pub after_total_cents: Option<i64>,
+    pub fields_changed: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -119,7 +142,7 @@ pub struct ReceiptItemView {
     pub line_id: String,
     pub name: String,
     pub category: String,
-    pub net_cents: i64,
+    pub net_cents: Option<i64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

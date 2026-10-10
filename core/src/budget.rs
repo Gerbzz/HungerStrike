@@ -46,6 +46,13 @@ pub fn budget_view(
     period: Period,
     week_start: u8,
 ) -> Result<BudgetView, String> {
+    macro_rules! add_cents {
+        ($field:expr, $value:expr) => {
+            $field = $field
+                .checked_add($value)
+                .ok_or("budget accounting overflow")?
+        };
+    }
     if week_start > 6 {
         return Err("week start must be 0 (Monday) through 6 (Sunday)".into());
     }
@@ -103,30 +110,50 @@ pub fn budget_view(
             continue;
         }
         view.receipt_count += 1;
-        view.cash_flow_cents += receipt.printed_total_cents.ok_or("receipt total missing")?;
-        view.tax_cents += receipt.printed_tax_cents.ok_or("receipt tax missing")?;
+        add_cents!(
+            view.cash_flow_cents,
+            receipt.printed_total_cents.ok_or("receipt total missing")?
+        );
+        add_cents!(
+            view.tax_cents,
+            receipt.printed_tax_cents.ok_or("receipt tax missing")?
+        );
         for item in &receipt.items {
-            view.gross_items_cents += item.gross_cents.ok_or("item gross missing")?;
-            view.discounts_cents += item.discount_cents;
+            add_cents!(view.gross_items_cents, item.gross_cents.unwrap_or(0));
+            add_cents!(view.discounts_cents, item.discount_cents);
             if item.category.starts_with("food.") {
-                view.food_spending_cents += item.net_cents.ok_or("item net missing")?;
+                add_cents!(view.food_spending_cents, item.net_cents.unwrap_or(0));
             }
             if item.category.starts_with("household.") {
-                view.household_goods_cents += item.net_cents.ok_or("item net missing")?;
+                add_cents!(view.household_goods_cents, item.net_cents.unwrap_or(0));
             }
         }
         for refund in &receipt.refunds {
-            view.refunds_cents += refund.amount_cents;
+            add_cents!(view.refunds_cents, refund.amount_cents);
             if refund.category.starts_with("food.") {
-                view.food_spending_cents += refund.amount_cents;
+                add_cents!(view.food_spending_cents, refund.amount_cents);
             }
             if refund.category.starts_with("household.") {
-                view.household_goods_cents += refund.amount_cents;
+                add_cents!(view.household_goods_cents, refund.amount_cents);
             }
         }
     }
-    view.reconciliation_cents = view.cash_flow_cents
-        - (view.gross_items_cents + view.discounts_cents + view.refunds_cents + view.tax_cents);
-    view.remaining_budget_cents = budget.map(|value| value - view.cash_flow_cents);
+    let allocated = view
+        .gross_items_cents
+        .checked_add(view.discounts_cents)
+        .and_then(|v| v.checked_add(view.refunds_cents))
+        .and_then(|v| v.checked_add(view.tax_cents))
+        .ok_or("budget reconciliation overflow")?;
+    view.reconciliation_cents = view
+        .cash_flow_cents
+        .checked_sub(allocated)
+        .ok_or("budget reconciliation overflow")?;
+    view.remaining_budget_cents = budget
+        .map(|value| {
+            value
+                .checked_sub(view.cash_flow_cents)
+                .ok_or("remaining budget overflow")
+        })
+        .transpose()?;
     Ok(view)
 }

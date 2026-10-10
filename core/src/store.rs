@@ -4,12 +4,18 @@ use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::model::{CategoryEdit, LotView, ReceiptDraft};
+use crate::model::{CategoryEdit, LotView, ReceiptDraft, ReceiptEdit};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct CostEvent {
     pub kind: String,
     pub amount_cents: i64,
+    #[serde(default)]
+    pub cost_unknown: bool,
+    #[serde(default)]
+    pub lot_id: Option<String>,
+    #[serde(default)]
+    pub quantity: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -25,6 +31,8 @@ pub(crate) struct State {
     pub monthly_budget_cents: Option<i64>,
     #[serde(default)]
     pub category_edits: Vec<CategoryEdit>,
+    #[serde(default)]
+    pub receipt_edits: Vec<ReceiptEdit>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -44,6 +52,7 @@ impl Default for State {
             weekly_budget_cents: None,
             monthly_budget_cents: None,
             category_edits: Vec::new(),
+            receipt_edits: Vec::new(),
         }
     }
 }
@@ -111,7 +120,14 @@ impl Store {
     }
 
     pub(crate) fn save(&mut self, state: &State) -> Result<(), String> {
-        let raw = serde_json::to_string(state).map_err(|e| e.to_string())?;
+        let mut safe = state.clone();
+        for receipt in &mut safe.receipts {
+            for item in &mut receipt.items {
+                item.raw.clear();
+            }
+            receipt.unallocated_adjustments.clear();
+        }
+        let raw = serde_json::to_string(&safe).map_err(|e| e.to_string())?;
         let transaction = self.connection.transaction().map_err(|e| e.to_string())?;
         transaction
             .execute(

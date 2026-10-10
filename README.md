@@ -1,30 +1,26 @@
-# HungerStrike local Windows prototype
+# HungerStrike · Rust desktop checkpoint
 
-HungerStrike is a Rust-first, local kitchen inventory prototype. The Windows release executable is at `target/release/hungerstrike-desktop.exe`. It uses bundled UI assets and a SQLite database at `%LOCALAPPDATA%\local.hungerstrike.desktop\hungerstrike.sqlite`. No account, cloud service, sync, telemetry, or paid API is used by the app.
+HungerStrike is a local kitchen inventory prototype. Its first-party application, interface, 3D scene, receipt logic, and persistence are Rust. The Windows executable is `target/release/hungerstrike-rust-desktop.exe`; run it directly. It stores data at `%LOCALAPPDATA%\HungerStrike\inventory.sqlite`. Set `HUNGERSTRIKE_DATA_DIR` to use a separate parent directory for a test run. The app has no account, cloud service, sync, telemetry, paid API, or runtime network call.
 
-## Try the local workflow
+## Try the workflow
 
-1. Run the executable. Paste text from `core/tests/fixtures/receipts/R001-purchase.txt` and choose **Review receipt**. Check item quantities, cents, discounts, category, and totals, then explicitly confirm. Receipt date is not an expiry date.
-2. Review `R002-refund.txt`. To remove the refunded milk from stock, select the original milk lot and enter `1` gallon for stock reversal. An unlinked refund still reduces food spending, but leaves stock unchanged and shows a refund reconciliation adjustment.
-3. Click fridge, freezer, or pantry in the fixed kitchen; use the searchable inventory list for keyboard access, location changes, consumption, and discards. Meal ideas use only confirmed stock. Spending has weekly/monthly date views, a configurable week start, budgets, and audited category edits.
-4. Use **Backup and restore** to save a JSON backup to a new local file, preview an import, and explicitly reconcile or replace. Replace creates a local undo point. Undo refuses to discard changes made after replacement.
+1. On **Receipt**, paste `core/tests/fixtures/receipts/R001-purchase.txt`, then **Parse text**. Review the date, each item, prices, units, discounts, category, subtotal, tax, and total. **Confirm new receipt** is the only path that writes inventory. **Cancel and clear** discards temporary text. Purchase date never becomes expiry.
+2. Parse `R002-refund.txt`. The milk refund can be linked to original lot `R001-L02` with one gallon of stock reversal, or left unlinked. Refunds affect spending either way; unlinked amounts appear separately in Spending.
+3. Select the 3D fridge, freezer, or pantry to filter stock; the list offers the same zones and inventory actions by keyboard. Arrow keys and scene buttons orbit/zoom. Meals use confirmed stock; unknown costs and expiry dates are marked.
+4. On **Spending**, inspect weekly/monthly budgets, discounts, refunds, reconciliation, and discarded food cost. Receipt corrections require **Correct existing receipt** and create an audit event; exact repeat imports do not charge again. Name, date, and expiry corrections can follow stock use. Cost or quantity corrections after stock use, and corrections after linked refunds, stay blocked to protect historical allocations.
+5. On **Data**, save a local JSON backup, preview an import, reconcile or replace explicitly, and use the local restore point if needed.
 
-For photos, **Scan a photo locally** sends PNG/JPEG bytes to an already installed English Tesseract at `C:\Program Files\Tesseract-OCR\tesseract.exe`. OCR creates only a draft. If the engine is absent or the image cannot be read, the photo preview and manual text entry remain available. No OCR binary or model is bundled.
+**Open photo · offline OCR** accepts PNG/JPEG under 8 MB through a separately installed local English Tesseract at `C:\Program Files\Tesseract-OCR\tesseract.exe`. The engine/model is not bundled. OCR text stays a temporary draft and is cleared on confirm or cancel. Manual entry works without the engine. Backups and SQLite omit raw receipt lines, photo bytes, and OCR transcripts; reviewed fields and sanitized audit metadata remain.
 
-The bundled synthetic receipts, generated test images, recipes, and all example prices/taxes are **SYNTHETIC TEST DATA**. They do not describe real purchases, current store prices, or tax guidance. The parser currently recognizes this limited fixture vocabulary; real receipts will require careful manual correction, and unresolved totals or discount lines cannot be confirmed.
+The receipt and image fixtures are **SYNTHETIC TEST DATA**. Prices and tax are invented fixture values, not current store prices or tax guidance. General receipts need human review; the parser recognizes common structures but is not a universal receipt interpreter. Unknown costs require explicit reconciliation, and unknown quantities require correction before confirmation.
 
-## Build and test locally
+## Build and verify
 
-From this directory, with Rust and Node already installed:
+With a local Rust toolchain:
 
 ```powershell
-npm ci
 cargo test --workspace
-npm test -- --run
-npm run tauri dev
-npm run tauri build
+cargo build --release -p hungerstrike-rust-desktop
 ```
 
-`tauri dev` uses a localhost Vite server. `tauri build` creates the local Windows executable without an installer or publication. Backups are plain JSON containing confirmed normalized purchase records and should be stored as private local files. Raw receipt lines, OCR transcripts, and images are excluded from portable backups.
-
-See [verification.md](verification.md) for exact test results and platform limits. The draft scope and full synthetic accounting fixtures remain in the sibling `HungerStrike-preparation` folder.
+[Verification](verification.md) records tested behavior and limits. The draft scope and accounting fixtures remain in the sibling `HungerStrike-preparation` folder.

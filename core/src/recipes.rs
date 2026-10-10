@@ -35,6 +35,7 @@ pub struct IngredientEstimate {
     pub unit: String,
     pub stock_used_quantity: String,
     pub estimated_cost_cents: i64,
+    pub cost_unknown: bool,
     pub missing_quantity: String,
 }
 
@@ -101,6 +102,7 @@ pub fn suggest_meals(
         let mut soon_expiring = Vec::new();
         let mut expiry_unknown = false;
         let mut total_cents = 0_i64;
+        let mut estimate_unknown = false;
         let mut available = true;
         for ingredient in &recipe.ingredients {
             let required = decimal(&ingredient.quantity)?;
@@ -109,6 +111,7 @@ pub fn suggest_meals(
             }
             let mut remaining = required;
             let mut cost_cents = 0_i64;
+            let mut ingredient_cost_unknown = false;
             for entry in stock.iter_mut().filter(|entry| {
                 entry.lot.name == ingredient.name && entry.lot.unit == ingredient.unit
             }) {
@@ -119,6 +122,10 @@ pub fn suggest_meals(
                     continue;
                 }
                 let taken = remaining.min(entry.quantity);
+                if entry.lot.cost_unknown {
+                    ingredient_cost_unknown = true;
+                    estimate_unknown = true;
+                }
                 let cost = allocated_cost(entry.cost_cents, entry.quantity, taken)?;
                 entry.quantity -= taken;
                 entry.cost_cents -= cost;
@@ -151,6 +158,7 @@ pub fn suggest_meals(
                 unit: ingredient.unit.clone(),
                 stock_used_quantity: (required - remaining).normalize().to_string(),
                 estimated_cost_cents: cost_cents,
+                cost_unknown: ingredient_cost_unknown,
                 missing_quantity: remaining.normalize().to_string(),
             });
         }
@@ -160,8 +168,14 @@ pub fn suggest_meals(
             servings: recipe.servings,
             steps: recipe.steps.clone(),
             available,
-            estimate_cents: Some(total_cents),
-            estimate_status: if available {
+            estimate_cents: if estimate_unknown {
+                None
+            } else {
+                Some(total_cents)
+            },
+            estimate_status: if estimate_unknown {
+                "unknown_cost"
+            } else if available {
                 "complete"
             } else {
                 "partial_missing_ingredient"
