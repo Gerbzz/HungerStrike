@@ -1,0 +1,16 @@
+SYNTHETIC TEST DATA — NOT A REAL TRANSACTION
+PUBLIX-STYLE GROCERY RECEIPT (FICTIONAL TEXT FIXTURE)
+FIXTURE ID R001  DATE 2026-10-03
+All prices and tax are invented fixture values, not current Publix prices or tax guidance.
+
+BANANAS       1.25 LB @ 0.69/LB       0.86
+MILK 2%      1 GAL                   4.29
+EGGS LG      12 CT                   3.49
+PASTA        2 @ 1.79                3.58
+PASTA BOGO DISC                      -1.79
+SPINACH      5 OZ                    2.99
+DISH SOAP    1 BTL                   3.99
+SUBTOTAL                            17.41
+TAX                                  0.28
+TOTAL                               17.69
+END SYNTHETIC TEST DATA

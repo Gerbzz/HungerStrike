@@ -1,0 +1,15 @@
+SYNTHETIC TEST DATA — NOT A REAL TRANSACTION
+PUBLIX-STYLE GROCERY RECEIPT (FICTIONAL TEXT FIXTURE)
+FIXTURE ID R002  DATE 2026-10-04
+All prices and tax are invented fixture values, not current Publix prices or tax guidance.
+
+APPLES       0.80 LB @ 1.49/LB       1.19
+RICE         2 LB                    3.79
+YOGURT       3 @ 1.25                3.75
+LOYALTY YOGURT DISC                  -0.75
+PAPER TOWELS 1 PACK                  5.49
+RETURN MILK 2% 1 GAL                -4.29
+SUBTOTAL                             9.18
+TAX                                  0.38
+TOTAL                                9.56
+END SYNTHETIC TEST DATA

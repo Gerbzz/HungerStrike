@@ -1,0 +1,14 @@
+SYNTHETIC TEST DATA — NOT A REAL TRANSACTION
+PUBLIX-STYLE GROCERY RECEIPT (FICTIONAL TEXT FIXTURE)
+FIXTURE ID R003  DATE 2026-10-05
+All prices and tax are invented fixture values, not current Publix prices or tax guidance.
+
+CHKN BRST    1.37 LB @ 4.49/LB       6.15
+TOMATOES     1.10 LB @ 1.99/LB       2.19
+CHEESE SHRD  8 OZ                    2.49
+GRN ONION    ?? @ 0.89
+SAVE ???                             -1.?0
+SUBTOTAL                             9.83
+TAX                                  0.00
+TOTAL                                9.83
+END SYNTHETIC TEST DATA

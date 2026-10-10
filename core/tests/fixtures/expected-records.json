@@ -1,0 +1,138 @@
+{
+  "label": "SYNTHETIC TEST DATA — NOT REAL TRANSACTIONS",
+  "schema_version": 1,
+  "currency": "USD",
+  "money_unit": "integer_cents",
+  "quantity_encoding": "decimal_strings_with_explicit_units",
+  "fixture_notice": "All prices and tax amounts are invented fixture values, not current Publix prices or tax guidance.",
+  "global_rules": {
+    "purchase_date_is_expiry_date": false,
+    "unknown_expiry": null,
+    "inventory_write_requires_confirmation": true,
+    "spending_write_requires_confirmation": true,
+    "non_food_enters_food_inventory": false,
+    "unresolved_totals_mismatch_auto_commits": false
+  },
+  "receipts": [
+    {
+      "id": "R001",
+      "source_text": "receipts/R001-purchase.txt",
+      "import_key": "fixture:R001:exact-text-v1",
+      "purchase_date": "2026-10-03",
+      "state_after_parse": "pending_confirmation",
+      "accounting_cents": {
+        "positive_goods": 1920,
+        "discounts": -179,
+        "refunds": 0,
+        "calculated_subtotal": 1741,
+        "printed_subtotal": 1741,
+        "printed_tax": 28,
+        "calculated_total": 1769,
+        "printed_total": 1769,
+        "printed_minus_calculated_total": 0
+      },
+      "items": [
+        {"line_id":"R001-L01","raw_label":"BANANAS","name":"bananas","quantity":"1.25","unit":"lb","gross_cents":86,"discount_cents":0,"net_cents":86,"category":"food.produce","expiry_date":null,"uncertainty":[]},
+        {"line_id":"R001-L02","raw_label":"MILK 2%","name":"milk 2%","quantity":"1","unit":"gal","gross_cents":429,"discount_cents":0,"net_cents":429,"category":"food.dairy","expiry_date":null,"uncertainty":[]},
+        {"line_id":"R001-L03","raw_label":"EGGS LG","name":"large eggs","quantity":"12","unit":"egg","gross_cents":349,"discount_cents":0,"net_cents":349,"category":"food.dairy","expiry_date":null,"unit_cost_allocation_cents":[30,29,29,29,29,29,29,29,29,29,29,29],"uncertainty":[]},
+        {"line_id":"R001-L04","raw_label":"PASTA","name":"pasta","quantity":"2","unit":"each","gross_cents":358,"discount_cents":-179,"net_cents":179,"category":"food.pantry","expiry_date":null,"unit_cost_allocation_cents":[90,89],"uncertainty":[]},
+        {"line_id":"R001-L05","raw_label":"SPINACH","name":"spinach","quantity":"5","unit":"oz","gross_cents":299,"discount_cents":0,"net_cents":299,"category":"food.produce","expiry_date":null,"ounce_cost_allocation_cents":[60,60,60,60,59],"uncertainty":[]},
+        {"line_id":"R001-L06","raw_label":"DISH SOAP","name":"dish soap","quantity":"1","unit":"bottle","gross_cents":399,"discount_cents":0,"net_cents":399,"category":"household.cleaning","expiry_date":null,"uncertainty":[]}
+      ],
+      "adjustments": [
+        {"kind":"bogo_discount","amount_cents":-179,"applies_to":"R001-L04","unit_discount_allocation_cents":[-89,-90]},
+        {"kind":"tax","amount_cents":28,"fixture_allocation_to":"R001-L06","uncertainty":["item_tax_allocation_is_fixture_assumption"]}
+      ]
+    },
+    {
+      "id": "R002",
+      "source_text": "receipts/R002-refund.txt",
+      "import_key": "fixture:R002:exact-text-v1",
+      "purchase_date": "2026-10-04",
+      "state_after_parse": "pending_confirmation",
+      "accounting_cents": {
+        "positive_goods": 1422,
+        "discounts": -75,
+        "refunds": -429,
+        "calculated_subtotal": 918,
+        "printed_subtotal": 918,
+        "printed_tax": 38,
+        "calculated_total": 956,
+        "printed_total": 956,
+        "printed_minus_calculated_total": 0
+      },
+      "items": [
+        {"line_id":"R002-L01","raw_label":"APPLES","name":"apples","quantity":"0.80","unit":"lb","gross_cents":119,"discount_cents":0,"net_cents":119,"category":"food.produce","expiry_date":null,"uncertainty":[]},
+        {"line_id":"R002-L02","raw_label":"RICE","name":"rice","quantity":"2","unit":"lb","gross_cents":379,"discount_cents":0,"net_cents":379,"category":"food.pantry","expiry_date":null,"uncertainty":[]},
+        {"line_id":"R002-L03","raw_label":"YOGURT","name":"yogurt","quantity":"3","unit":"each","gross_cents":375,"discount_cents":-75,"net_cents":300,"category":"food.dairy","expiry_date":null,"unit_cost_allocation_cents":[100,100,100],"uncertainty":["container_size_not_printed"]},
+        {"line_id":"R002-L04","raw_label":"PAPER TOWELS","name":"paper towels","quantity":"1","unit":"pack","gross_cents":549,"discount_cents":0,"net_cents":549,"category":"household.paper","expiry_date":null,"uncertainty":[]}
+      ],
+      "adjustments": [
+        {"kind":"loyalty_discount","amount_cents":-75,"applies_to":"R002-L03","unit_discount_allocation_cents":[-25,-25,-25]},
+        {"kind":"refund","amount_cents":-429,"quantity":"-1","unit":"gal","name":"milk 2%","original_line_id":"R001-L02","inventory_delta_requires_original_lot":true},
+        {"kind":"tax","amount_cents":38,"fixture_allocation_to":"R002-L04","uncertainty":["item_tax_allocation_is_fixture_assumption"]}
+      ]
+    },
+    {
+      "id": "R003",
+      "source_text": "receipts/R003-uncertain.txt",
+      "import_key": "fixture:R003:exact-text-v1",
+      "purchase_date": "2026-10-05",
+      "state_after_parse": "needs_user_resolution",
+      "accounting_cents": {
+        "known_positive_lines_only": 1083,
+        "known_discounts": 0,
+        "printed_subtotal": 983,
+        "printed_tax": 0,
+        "printed_total": 983,
+        "printed_minus_known_lines": -100,
+        "definitive_calculated_total": null
+      },
+      "items": [
+        {"line_id":"R003-L01","raw_label":"CHKN BRST","name":"chicken breast","quantity":"1.37","unit":"lb","gross_cents":615,"net_cents":615,"category":"food.meat","expiry_date":null,"uncertainty":[]},
+        {"line_id":"R003-L02","raw_label":"TOMATOES","name":"tomatoes","quantity":"1.10","unit":"lb","gross_cents":219,"net_cents":219,"category":"food.produce","expiry_date":null,"uncertainty":[]},
+        {"line_id":"R003-L03","raw_label":"CHEESE SHRD","name":"shredded cheese","quantity":"8","unit":"oz","gross_cents":249,"net_cents":249,"category":"food.dairy","expiry_date":null,"uncertainty":[]},
+        {"line_id":"R003-L04","raw_label":"GRN ONION","name":"green onion","quantity":null,"unit":null,"gross_cents":null,"net_cents":null,"category":"food.produce","expiry_date":null,"uncertainty":["malformed_quantity","missing_extended_price"]}
+      ],
+      "adjustments": [
+        {"kind":"unparsed_savings","raw":"SAVE ??? -1.?0","amount_cents":null,"applies_to":null,"uncertainty":["malformed_amount","unknown_item_allocation"]}
+      ],
+      "uncertainty": ["totals_mismatch_100_cents_against_known_lines","unknown_green_onion_amount","unknown_savings_amount"],
+      "expected_confirmed_inventory_delta": [],
+      "expected_confirmed_spending_delta_cents": 0
+    }
+  ],
+  "expected_event_sequence": [
+    {"event":"import","receipt_id":"R001","result":"pending_confirmation","inventory_writes":0,"spending_writes":0},
+    {"event":"confirm","receipt_id":"R001","result":"accepted","food_inventory_delta_lines":{"R001-L01":"+1.25 lb","R001-L02":"+1 gal","R001-L03":"+12 egg","R001-L04":"+2 each","R001-L05":"+5 oz"},"non_food_inventory_delta_lines":{},"spending_delta_cents":1769},
+    {"event":"import","receipt_id":"R002","result":"pending_confirmation","inventory_writes":0,"spending_writes":0},
+    {"event":"confirm","receipt_id":"R002","result":"accepted_with_refund_link_to_R001-L02","food_inventory_delta_lines":{"R002-L01":"+0.80 lb","R002-L02":"+2 lb","R002-L03":"+3 each","R001-L02":"-1 gal"},"non_food_inventory_delta_lines":{},"spending_delta_cents":956},
+    {"event":"import_exact_repeat","receipt_id":"R001","import_key":"fixture:R001:exact-text-v1","result":"duplicate_existing_receipt","inventory_writes":0,"spending_writes":0},
+    {"event":"import","receipt_id":"R003","result":"needs_user_resolution","inventory_writes":0,"spending_writes":0},
+    {"event":"attempt_confirm_unresolved","receipt_id":"R003","result":"blocked_pending_correction","inventory_writes":0,"spending_writes":0},
+    {"event":"consume","source_line_id":"R001-L03","quantity":"6","unit":"egg","allocated_cost_cents":175,"purchase_spending_delta_cents":0},
+    {"event":"discard","source_line_id":"R001-L05","quantity":"2","unit":"oz","allocated_discard_cost_cents":120,"purchase_spending_delta_cents":0}
+  ],
+  "expected_after_sequence": {
+    "confirmed_receipts": ["R001","R002"],
+    "pending_receipts": ["R003"],
+    "net_receipt_spending_cents": 2725,
+    "food_spending_cents_excluding_tax": 1711,
+    "household_goods_cents": 948,
+    "tax_cents": 66,
+    "household_spending_cents_with_fixture_tax_allocation": 1014,
+    "consumed_food_cost_cents": 175,
+    "discarded_food_cost_cents": 120,
+    "remaining_food_inventory_cost_cents": 1416,
+    "remaining_food_lots": [
+      {"source_line_id":"R001-L01","quantity":"1.25","unit":"lb","remaining_cost_cents":86},
+      {"source_line_id":"R001-L02","quantity":"0","unit":"gal","remaining_cost_cents":0,"reason":"linked_refund"},
+      {"source_line_id":"R001-L03","quantity":"6","unit":"egg","remaining_cost_cents":174},
+      {"source_line_id":"R001-L04","quantity":"2","unit":"each","remaining_cost_cents":179},
+      {"source_line_id":"R001-L05","quantity":"3","unit":"oz","remaining_cost_cents":179},
+      {"source_line_id":"R002-L01","quantity":"0.80","unit":"lb","remaining_cost_cents":119},
+      {"source_line_id":"R002-L02","quantity":"2","unit":"lb","remaining_cost_cents":379},
+      {"source_line_id":"R002-L03","quantity":"3","unit":"each","remaining_cost_cents":300}
+    ]
+  }
+}
