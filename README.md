@@ -1,6 +1,20 @@
-# HungerStrike · Rust Windows preview
+# HungerStrike
 
-HungerStrike is a local kitchen inventory and receipt-review prototype by PWDS. Its first-party application, interface, 3D scene, receipt logic, and persistence are Rust. This repository contains the Windows source checkpoint; no binary or installer is included. See [launch notes](docs/launch.md) after building locally. It stores data at `%LOCALAPPDATA%\HungerStrike\inventory.sqlite`. Set `HUNGERSTRIKE_DATA_DIR` to use a separate parent directory for a test run. The app has no account, cloud service, sync, telemetry, paid API, or runtime network call.
+**by PWDS**
+
+**Know what is in the kitchen.**
+
+HungerStrike connects receipt review with a local kitchen inventory. Parse receipt text, inspect each line before confirming stock changes, and use the inventory to keep track of what is on hand.
+
+### Highlights
+
+- Review receipt items, prices, and totals before committing.
+- Track purchases and linked refunds in local inventory.
+- Keep kitchen data in a local SQLite database.
+
+## Current status
+
+Windows source preview. The application and receipt workflow are present, but no binary or installer is included. Native pointer, keyboard, accessibility, and broader device acceptance remain open; the Android preview is a separate unverified source branch.
 
 ## Try the workflow
 
@@ -26,3 +40,7 @@ cargo build --release -p hungerstrike-rust-desktop
 [Verification](verification.md) records tested behavior and limits. The included fixtures are synthetic. Native pointer, keyboard, accessibility, and broader device acceptance remain open. No first-party source license has been selected for this public checkpoint.
 
 The separate [Android preview source branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) contains a sanitized, source-only mobile snapshot. It has no APK release and is not yet validated on a physical arm64 device.
+
+## Local data
+
+The Windows app stores inventory at `%LOCALAPPDATA%\HungerStrike\inventory.sqlite`; set `HUNGERSTRIKE_DATA_DIR` to choose a separate parent directory for a test run. This source checkpoint has no account, cloud sync, telemetry, paid API, or runtime network call. See [launch notes](docs/launch.md) after building locally.
