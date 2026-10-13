@@ -24,3 +24,5 @@ cargo build --release -p hungerstrike-rust-desktop
 ```
 
 [Verification](verification.md) records tested behavior and limits. The included fixtures are synthetic. Native pointer, keyboard, accessibility, and broader device acceptance remain open. No first-party source license has been selected for this public checkpoint.
+
+The separate [Android preview source branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) contains a sanitized, source-only mobile snapshot. It has no APK release and is not yet validated on a physical arm64 device.
