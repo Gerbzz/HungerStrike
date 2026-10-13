@@ -1,3 +1,4 @@
+#[cfg(not(target_os = "android"))]
 use std::io::Write;
 
 use bevy_egui::egui::{self, RichText};
@@ -6,7 +7,9 @@ use hungerstrike_core::{
     Period, RecipeCollection, RefundLine, ReplaceOrReconcile,
 };
 
-use crate::{ocr, AppAction, AppState, ReceiptCommit, Tab};
+#[cfg(not(target_os = "android"))]
+use crate::ocr;
+use crate::{platform, AppAction, AppState, ReceiptCommit, Tab};
 
 fn money(cents: i64) -> String {
     let sign = if cents < 0 { "-" } else { "" };
@@ -26,7 +29,7 @@ fn metric(ui: &mut egui::Ui, label: &str, value: String, color: egui::Color32) {
 
 fn option_text(ui: &mut egui::Ui, label: &str, value: &mut Option<String>) {
     let mut text = value.clone().unwrap_or_default();
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label(label);
         if ui.text_edit_singleline(&mut text).changed() {
             *value = if text.trim().is_empty() {
@@ -39,7 +42,7 @@ fn option_text(ui: &mut egui::Ui, label: &str, value: &mut Option<String>) {
 }
 
 fn option_cents(ui: &mut egui::Ui, label: &str, value: &mut Option<i64>) {
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label(label);
         let mut known = value.is_some();
         if ui.checkbox(&mut known, "known").changed() {
@@ -52,6 +55,7 @@ fn option_cents(ui: &mut egui::Ui, label: &str, value: &mut Option<i64>) {
 }
 
 pub fn draw(ctx: &egui::Context, state: &mut AppState) {
+    let mobile = cfg!(target_os = "android");
     if !state.style_ready {
         let mut style = (*ctx.style()).clone();
         style
@@ -73,7 +77,37 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
         ctx.set_style(style);
         state.style_ready = true;
     }
+    if mobile {
+        egui::TopBottomPanel::top("android_status_inset").show(ctx, |ui| {
+            ui.set_min_height(36.0);
+        });
+    }
     egui::TopBottomPanel::top("header").show(ctx, |ui| {
+        if mobile {
+            ui.label(
+                RichText::new("HungerStrike")
+                    .size(22.0)
+                    .strong()
+                    .color(egui::Color32::from_rgb(152, 220, 179)),
+            );
+            ui.horizontal_wrapped(|ui| {
+                for (label, tab) in [
+                    ("Kitchen", Tab::Kitchen),
+                    ("Receipt", Tab::Receipt),
+                    ("Meals", Tab::Meals),
+                    ("Spending", Tab::Spending),
+                    ("Data", Tab::Data),
+                ] {
+                    if ui
+                        .selectable_label(state.tab == tab, RichText::new(label).size(16.0))
+                        .clicked()
+                    {
+                        let _ = state.dispatch(AppAction::Navigate(tab));
+                    }
+                }
+            });
+            return;
+        }
         ui.set_min_height(54.0);
         ui.horizontal_wrapped(|ui| {
             ui.label(
@@ -105,7 +139,12 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
             );
         });
     });
-    if state.tab == Tab::Kitchen {
+    if mobile {
+        egui::TopBottomPanel::bottom("android_navigation_inset").show(ctx, |ui| {
+            ui.set_min_height(24.0);
+        });
+    }
+    if state.tab == Tab::Kitchen && !mobile {
         egui::SidePanel::left("controls")
             .resizable(true)
             .default_width(450.0)
@@ -179,13 +218,18 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
             .frame(
                 egui::Frame::default()
                     .fill(egui::Color32::from_rgb(24, 29, 34))
-                    .inner_margin(egui::Margin::same(26)),
+                    .inner_margin(egui::Margin::same(if mobile { 14 } else { 26 })),
             )
             .show(ctx, |ui| {
+                let content_width = ui.available_width();
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        ui.set_max_width(1040.0);
+                        if mobile {
+                            ui.set_width(content_width);
+                        } else {
+                            ui.set_max_width(1040.0);
+                        }
                         if !state.message.is_empty() {
                             egui::Frame::group(ui.style()).show(ui, |ui| {
                                 ui.label(&state.message);
@@ -193,7 +237,7 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                             ui.add_space(12.0);
                         }
                         match state.tab {
-                            Tab::Kitchen => {}
+                            Tab::Kitchen => kitchen(ui, state),
                             Tab::Receipt => receipt(ui, state),
                             Tab::Meals => meals(ui, state),
                             Tab::Spending => spending(ui, state),
@@ -230,7 +274,7 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
                         })
             })
             .count();
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         metric(
             ui,
             "stock lots",
@@ -320,12 +364,12 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
             "Selected: {} · {} {}",
             lot.name, lot.quantity, lot.unit
         ));
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label("Quantity");
             ui.text_edit_singleline(&mut state.quantity);
         });
         let mut action = None;
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if ui.button("Consume").clicked() {
                 action = Some(InventoryAction::Consume {
                     lot_id: state.lot_id.clone(),
@@ -339,7 +383,7 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
                 });
             }
         });
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label("Move to");
             for zone in ["fridge", "freezer", "pantry"] {
                 if ui.button(zone).clicked() {
@@ -361,7 +405,7 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
     ui.label("Choose a confirmed line to change its category. Cross-group moves after stock use or linked refunds are blocked.");
     let lines = state.snapshot.receipt_items.clone();
     for item in &lines {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if ui
                 .selectable_label(
                     state.category.starts_with(&format!("{}|", item.line_id)),
@@ -383,7 +427,7 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
     if let Some((line_id, category)) = state.category.clone().split_once('|') {
         let line_id = line_id.to_string();
         let mut new_category = category.to_string();
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label("Category");
             ui.text_edit_singleline(&mut new_category);
         });
@@ -408,31 +452,44 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
 
 fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Review a receipt");
-    ui.label(
-        "Paste text or open a local PNG/JPEG. Review the lines and totals before anything enters inventory.",
-    );
+    if platform::current_file_features().photo_ocr {
+        ui.label("Paste text or open a local PNG/JPEG. Review the lines and totals before anything enters inventory.");
+    } else {
+        ui.label("Photo OCR is unavailable in this Android preview. Type receipt text and review every field before confirmation.");
+    }
+    #[cfg(not(target_os = "android"))]
     if state.ocr_task.is_some() {
         ui.colored_label(
             egui::Color32::from_rgb(242, 188, 108),
             "Offline OCR is running. Cancel and clear stops the engine.",
         );
     }
-    egui::ScrollArea::vertical()
-        .id_salt("receipt_source_scroll")
-        .max_height(170.0)
-        .show(ui, |ui| {
-            ui.add(
-                egui::TextEdit::multiline(&mut state.raw_text)
-                    .desired_width(ui.available_width())
-                    .hint_text("Paste receipt text here"),
-            );
-        });
-    ui.horizontal(|ui| {
+    if cfg!(target_os = "android") {
+        ui.add(
+            egui::TextEdit::multiline(&mut state.raw_text)
+                .desired_rows(5)
+                .desired_width(ui.available_width())
+                .hint_text("Type receipt text here"),
+        );
+    } else {
+        egui::ScrollArea::vertical()
+            .id_salt("receipt_source_scroll")
+            .max_height(170.0)
+            .show(ui, |ui| {
+                ui.add(
+                    egui::TextEdit::multiline(&mut state.raw_text)
+                        .desired_width(ui.available_width())
+                        .hint_text("Paste receipt text here"),
+                );
+            });
+    }
+    ui.horizontal_wrapped(|ui| {
         if ui.button("Parse text").clicked() {
             if let Err(error) = state.dispatch(AppAction::ParseReceipt) {
                 state.message = error;
             }
         }
+        #[cfg(not(target_os = "android"))]
         if ui
             .add_enabled(
                 state.ocr_task.is_none(),
@@ -459,6 +516,8 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
                 }
             }
         }
+        #[cfg(target_os = "android")]
+        ui.add_enabled(false, egui::Button::new("Open photo - unavailable"));
         if ui.button("Cancel and clear").clicked() {
             let _ = state.dispatch(AppAction::CancelReceipt);
         }
@@ -469,7 +528,7 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
     ui.add_space(14.0);
     ui.separator();
     ui.heading("1. Check receipt details");
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         metric(
             ui,
             "purchase lines",
@@ -492,7 +551,7 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
             egui::Color32::from_rgb(242, 188, 108),
         );
     });
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label("Receipt ID");
         let previous_id = draft.id.clone();
         if ui.text_edit_singleline(&mut draft.id).changed() {
@@ -573,18 +632,18 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
         egui::CollapsingHeader::new(format!("{} · {}", index + 1, item.name))
             .default_open(index < 2 || !item.uncertainty.is_empty())
             .show(ui, |ui| {
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label("Name");
                     ui.text_edit_singleline(&mut item.name);
                 });
                 option_text(ui, "Quantity", &mut item.quantity);
                 option_text(ui, "Unit", &mut item.unit);
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label("Category");
                     ui.text_edit_singleline(&mut item.category);
                 });
                 option_cents(ui, "Gross amount", &mut item.gross_cents);
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label("Discount cents (negative)");
                     ui.add(egui::DragValue::new(&mut item.discount_cents));
                 });
@@ -642,17 +701,17 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
         egui::CollapsingHeader::new(format!("Refund {} · {}", index + 1, refund.name))
             .default_open(true)
             .show(ui, |ui| {
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label("Name");
                     ui.text_edit_singleline(&mut refund.name);
                 });
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label("Category");
                     ui.text_edit_singleline(&mut refund.category);
                 });
                 option_text(ui, "Refunded quantity", &mut refund.quantity);
                 option_text(ui, "Unit", &mut refund.unit);
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label("Amount cents (negative)");
                     ui.add(egui::DragValue::new(&mut refund.amount_cents));
                 });
@@ -689,7 +748,7 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
     ui.label("Unassigned source adjustments (review, edit, or remove false positives):");
     let mut remove_adjustment = None;
     for (index, line) in draft.unallocated_adjustments.iter_mut().enumerate() {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.text_edit_singleline(line);
             if ui.button("Remove").clicked() {
                 remove_adjustment = Some(index);
@@ -722,7 +781,7 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
     }
     ui.heading("4. Confirm your review");
     let mut confirmed = false;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if ui
             .add_enabled(valid, egui::Button::new("Confirm new receipt"))
             .clicked()
@@ -768,7 +827,7 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
 fn meals(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Meals from your stock");
     ui.label("Suggestions use confirmed quantities. Estimated cost comes from remaining lot cost; unknown prices stay unknown.");
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label("Today YYYY-MM-DD");
         ui.text_edit_singleline(&mut state.reference_date);
     });
@@ -784,7 +843,7 @@ fn meals(ui: &mut egui::Ui, state: &mut AppState) {
                 .iter()
                 .filter(|meal| !meal.soon_expiring.is_empty())
                 .count();
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 metric(
                     ui,
                     "cook now",
@@ -871,7 +930,7 @@ fn meals(ui: &mut egui::Ui, state: &mut AppState) {
 fn spending(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Spending overview");
     ui.label("Receipt cash, item allocation and stock-use costs are shown separately so they do not double count.");
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         metric(
             ui,
             "cash flow",
@@ -929,7 +988,7 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
     ));
     ui.separator();
     ui.heading("Weekly and monthly budgets");
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label("Reference date YYYY-MM-DD");
         ui.text_edit_singleline(&mut state.reference_date);
     });
@@ -967,7 +1026,7 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
         } else {
             &mut state.monthly_budget
         };
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.strong(format!("{label} budget cents"));
             ui.add(egui::DragValue::new(budget_input).range(0..=100_000_000));
             if ui.button("Save").clicked() {
@@ -1022,7 +1081,18 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
 
 fn data(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Local data");
-    ui.label("A backup is a local JSON file. Review its preview before reconciling or replacing the current data.");
+    if platform::current_file_features().portable_backup {
+        ui.label("A backup is a local JSON file. Review its preview before reconciling or replacing the current data.");
+    } else {
+        ui.colored_label(egui::Color32::from_rgb(242, 188, 108),
+            "Portable backup file import and export are unavailable in this Android preview. Data stays in this app's private local storage.");
+    }
+    #[cfg(target_os = "android")]
+    {
+        ui.add_enabled(false, egui::Button::new("Export backup - unavailable"));
+        ui.add_enabled(false, egui::Button::new("Open backup - unavailable"));
+    }
+    #[cfg(not(target_os = "android"))]
     if ui.button("Export backup").clicked() {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("JSON backup", &["json"])
@@ -1041,6 +1111,7 @@ fn data(ui: &mut egui::Ui, state: &mut AppState) {
                 .unwrap_or_else(|e| e);
         }
     }
+    #[cfg(not(target_os = "android"))]
     if ui.button("Open backup for preview").clicked() {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("JSON backup", &["json"])
@@ -1065,7 +1136,7 @@ fn data(ui: &mut egui::Ui, state: &mut AppState) {
             preview.duplicate_receipts, preview.conflicting_identifiers
         ));
         let mut mode = None;
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if ui.button("Reconcile nonoverlapping data").clicked() {
                 mode = Some(ReplaceOrReconcile::Reconcile);
             }
@@ -1082,6 +1153,7 @@ fn data(ui: &mut egui::Ui, state: &mut AppState) {
             }
         }
     }
+    #[cfg(not(target_os = "android"))]
     if ui.button("Undo last replacement").clicked() {
         if let Err(error) = state.dispatch(AppAction::UndoBackup) {
             state.message = error;
@@ -1119,5 +1191,9 @@ fn data(ui: &mut egui::Ui, state: &mut AppState) {
             ));
         }
     });
-    ui.label("Offline photo OCR requires a separately installed local Tesseract executable. Manual text entry always remains available.");
+    if platform::current_file_features().photo_ocr {
+        ui.label("Offline photo OCR requires a separately installed local Tesseract executable. Manual text entry always remains available.");
+    } else {
+        ui.label("Photo OCR is unavailable in this Android preview. Manual receipt text entry remains available.");
+    }
 }

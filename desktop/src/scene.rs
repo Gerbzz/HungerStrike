@@ -66,12 +66,14 @@ pub fn setup(
     commands.spawn((
         Camera3d::default(),
         Transform::from_xyz(6.0, 5.2, 8.0).looking_at(Vec3::new(0.0, 1.2, 0.0), Vec3::Y),
+        #[cfg(target_os = "android")]
+        Msaa::Off,
     ));
     commands.spawn((
         PointLight {
             intensity: 5_000_000.0,
             range: 30.0,
-            shadows_enabled: true,
+            shadows_enabled: !cfg!(target_os = "android"),
             ..default()
         },
         Transform::from_xyz(1.0, 7.0, 6.0),

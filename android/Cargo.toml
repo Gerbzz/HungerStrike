@@ -1,0 +1,25 @@
+[package]
+name = "hungerstrike-android"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+bevy = { version = "0.18.0", default-features = false, features = ["android-native-activity", "android_shared_stdcxx"] }
+hungerstrike-rust-desktop = { path = "../desktop" }
+
+[package.metadata.android]
+package = "com.hungerstrike.preview"
+apk_name = "HungerStrike-intermediate"
+build_targets = ["aarch64-linux-android"]
+strip = "strip"
+
+[package.metadata.android.sdk]
+min_sdk_version = 26
+target_sdk_version = 33
+
+[package.metadata.android.application]
+label = "HungerStrike Preview"

@@ -24,3 +24,9 @@ cargo build --release -p hungerstrike-rust-desktop
 ```
 
 [Verification](verification.md) records tested behavior and limits. The included fixtures are synthetic. Native pointer, keyboard, accessibility, and broader device acceptance remain open. No first-party source license has been selected for this public checkpoint.
+
+## Android preview source
+
+The ndroid/ workspace member contains a Rust/Bevy NativeActivity preview with typed receipt intake and app-private SQLite storage. Earlier local checks ran a debug arm64 build under x86_64 translation and a native x86_64 emulator build; a physical arm64 device, broader GPUs, accessibility, backup, and native input remain unverified. No APK or installer is included here. Android photo OCR and portable backup file dialogs are unavailable in this preview.
+
+The optional local packaging script ndroid/build-preview.ps1 needs an installed Android SDK/NDK, Java, Rust Android target, cargo-apk, and a local debug keystore. Set ANDROID_HOME and HUNGERSTRIKE_DEBUG_KEYSTORE_PASSWORD in your shell; use -NdkRoot if the installed NDK differs from the script default. The script configuration was sanitized for this source snapshot and has not been rerun. See [the Android checkpoint](docs/verification/android-build-attempt.md) for the earlier bounded test evidence and limitations.
