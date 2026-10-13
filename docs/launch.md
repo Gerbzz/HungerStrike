@@ -1,6 +1,6 @@
 # HungerStrike Windows launch
 
-Run the portable local build at `dist/windows/HungerStrike.exe`. No installer, account, cloud service or paid API is involved. This folder is the stable launch location in this workspace; `target/release/hungerstrike-rust-desktop.exe` is the build output.
+Build from this repository with `cargo build --release -p hungerstrike-rust-desktop`, then run `target/release/hungerstrike-rust-desktop.exe`. No installer, account, cloud service or paid API is involved.
 
 On Windows the app stores confirmed data at `%LOCALAPPDATA%\HungerStrike\inventory.sqlite`. The **Data** tab can export a JSON backup and preview a restore before applying it. Set `HUNGERSTRIKE_DATA_DIR` to a different parent directory only for an isolated test run.
 

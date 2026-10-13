@@ -1,6 +1,6 @@
 # HungerStrike · Rust Windows preview
 
-HungerStrike is a local kitchen inventory prototype. Its first-party application, interface, 3D scene, receipt logic, and persistence are Rust. Launch the portable Windows build at `dist/windows/HungerStrike.exe`; see [launch notes](docs/launch.md). It stores data at `%LOCALAPPDATA%\HungerStrike\inventory.sqlite`. Set `HUNGERSTRIKE_DATA_DIR` to use a separate parent directory for a test run. The app has no account, cloud service, sync, telemetry, paid API, or runtime network call.
+HungerStrike is a local kitchen inventory and receipt-review prototype by PWDS. Its first-party application, interface, 3D scene, receipt logic, and persistence are Rust. This repository contains the Windows source checkpoint; no binary or installer is included. See [launch notes](docs/launch.md) after building locally. It stores data at `%LOCALAPPDATA%\HungerStrike\inventory.sqlite`. Set `HUNGERSTRIKE_DATA_DIR` to use a separate parent directory for a test run. The app has no account, cloud service, sync, telemetry, paid API, or runtime network call.
 
 ## Try the workflow
 
@@ -23,4 +23,4 @@ cargo test --workspace
 cargo build --release -p hungerstrike-rust-desktop
 ```
 
-[Verification](verification.md) records tested behavior and limits. The draft scope and accounting fixtures remain in the sibling `HungerStrike-preparation` folder.
+[Verification](verification.md) records tested behavior and limits. The included fixtures are synthetic. Native pointer, keyboard, accessibility, and broader device acceptance remain open. No first-party source license has been selected for this public checkpoint.
