@@ -1,10 +1,14 @@
-# HungerStrike
+<p align="center">
+  <img src="assets/branding/HungerStrike.png" alt="Original HungerStrike dormouse and pear logo" width="160" height="160">
+</p>
 
-**by PWDS**
+<h1 align="center">HungerStrike</h1>
 
-**Know what is in the kitchen, from the receipt onward.** HungerStrike brings reviewed purchases, local stock, meal ideas, and spending into one Windows desktop workspace. Every receipt stays a draft until you confirm what it says.
+<p align="center"><strong>by PWDS</strong><br><strong>Know what is in the kitchen, from the receipt onward.</strong></p>
 
-[Walk through the app](docs/workflow.md) · [Build and launch](docs/launch.md) · [Verification and limits](verification.md)
+HungerStrike brings reviewed purchases, local stock, meal ideas, and spending into one Windows desktop workspace. Every receipt stays a draft until you confirm what it says.
+
+<p align="center"><a href="docs/workflow.md">Walk through the app</a> · <a href="docs/launch.md">Build and launch</a> · <a href="verification.md">Verification and limits</a> · <a href="assets/branding">Original artwork</a></p>
 
 ## From a receipt to a useful kitchen
 
