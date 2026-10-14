@@ -160,15 +160,17 @@ fn metric(ui: &mut egui::Ui, label: &str, value: String, color: egui::Color32) {
             egui::Color32::from_rgb(218, 226, 225),
         ))
         .show(ui, |ui| {
-            ui.set_min_width(72.0);
-            ui.set_max_width(72.0);
-            ui.set_min_height(50.0);
-            ui.label(RichText::new(value).size(18.0).strong().color(color));
-            ui.label(
-                RichText::new(label)
-                    .size(11.0)
-                    .color(egui::Color32::from_rgb(84, 103, 105)),
-            );
+            ui.vertical(|ui| {
+                ui.set_min_width(72.0);
+                ui.set_max_width(72.0);
+                ui.set_min_height(50.0);
+                ui.label(RichText::new(value).size(18.0).strong().color(color));
+                ui.label(
+                    RichText::new(label)
+                        .size(11.0)
+                        .color(egui::Color32::from_rgb(84, 103, 105)),
+                );
+            });
         });
 }
 
@@ -651,6 +653,7 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
     }
     for lot in &visible {
         let selected = state.lot_id == lot.id;
+        let row_width = ui.available_width();
         let row = egui::Frame::group(ui.style())
             .fill(if selected {
                 egui::Color32::from_rgb(231, 243, 239)
@@ -668,7 +671,7 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
             .inner_margin(egui::Margin::symmetric(8, 5))
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 2.0;
-                ui.set_min_width(ui.available_width().min(390.0));
+                ui.set_width((row_width - 18.0).max(0.0));
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(&lot.name).strong());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
