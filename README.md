@@ -15,9 +15,9 @@
 
 HungerStrike brings reviewed purchases, local stock, meal ideas, and spending into one Windows desktop workspace. Every receipt stays a draft until you confirm what it says.
 
-![Current light HungerStrike Kitchen with the original dormouse and PWDS logos, stocked fridge, and selected inventory details](assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1600.png)
+![Current light HungerStrike Kitchen with the original dormouse and PWDS logos, stocked fridge, and complete selected inventory details](assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1600x1100.png)
 
-*New app-rendered light interface from source `74ca953`, using synthetic stock. [Capture provenance and limits](docs/LIGHT_SCREENSHOT_PROVENANCE.md). See the new [receipt review](assets/screenshots/hungerstrike-receipt-light-74ca953.png), [meal ideas](assets/screenshots/hungerstrike-meals-light-74ca953.png), [spending view](assets/screenshots/hungerstrike-spending-light-74ca953.png), and [1280 x 720 Kitchen](assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1280.png). The [older dark public-version capture](assets/screenshots/hungerstrike-kitchen-current.png) and its [provenance](docs/SCREENSHOT_PROVENANCE.md) remain available.*
+*New app-rendered light interface from source `74ca953`, using synthetic stock. The 1600 x 1100 Kitchen frame shows the complete inspector; the [1600 x 900](assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1600.png) and [1280 x 720](assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1280.png) frames preserve the shorter viewport views. [Capture provenance and limits](docs/LIGHT_SCREENSHOT_PROVENANCE.md). See the new [receipt review](assets/screenshots/hungerstrike-receipt-light-74ca953.png), [meal ideas](assets/screenshots/hungerstrike-meals-light-74ca953.png), and [spending view](assets/screenshots/hungerstrike-spending-light-74ca953.png). The [older dark public-version capture](assets/screenshots/hungerstrike-kitchen-current.png) and its [provenance](docs/SCREENSHOT_PROVENANCE.md) remain available.*
 
 <p align="center"><a href="docs/workflow.md">Walk through the app</a> · <a href="docs/launch.md">Build and launch</a> · <a href="verification.md">Verification and limits</a> · <a href="assets/branding">Original artwork</a></p>
 
