@@ -1,0 +1,21 @@
+{
+  "app": "HungerStrike",
+  "asset": "assets/branding/HungerStrike.png",
+  "method": "Lossless rectangular extraction of original pixels with ImageMagick. No scaling, recoloring, tracing, generation, transparency fabrication or animal changes. Original cream outside rounded corners retained. Labels excluded.",
+  "coordinate_system": "Origin top-left; crop bounds [left, top, right, bottom), right/bottom exclusive.",
+  "source_sha256": "511411a7067620626aa7ca176ef259a994395a391128db66d7c80c9418c4e3b2",
+  "crop_bounds": [
+    1360,
+    0,
+    2016,
+    656
+  ],
+  "dimensions": [
+    656,
+    656
+  ],
+  "sha256": "6f56d9a1587981d2f6dfafcaa79ed6480b29c27d091d31ca8d5f9d1778b2393e",
+  "decoded_rgb_sha256": "6f60c5d51b3fcc751056e41518672402d2575891b9328bca5cddfe9e5cccee11",
+  "pixel_equality_verified": true,
+  "git_blob_sha": "96492db46406baac04d7cf9c77dd99c1f7d7dcbf"
+}
