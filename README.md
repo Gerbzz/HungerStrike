@@ -15,7 +15,9 @@
 
 HungerStrike brings reviewed purchases, local stock, meal ideas, and spending into one Windows desktop workspace. Every receipt stays a draft until you confirm what it says.
 
-The current branch has newer branding, Kitchen, and recipe-planning source. Its desktop build and new app-rendered screenshots are pending. The [previously verified light Kitchen](assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1600x1100.png), [receipt review](assets/screenshots/hungerstrike-receipt-light-74ca953.png), [Meals](assets/screenshots/hungerstrike-meals-light-74ca953.png), and [spending](assets/screenshots/hungerstrike-spending-light-74ca953.png) images came from source `74ca953` before these changes; see their [capture provenance](docs/LIGHT_SCREENSHOT_PROVENANCE.md). The [older dark public-version image](assets/screenshots/hungerstrike-kitchen-current.png) is also preserved with its [provenance](docs/SCREENSHOT_PROVENANCE.md).
+<p align="center"><img src="assets/screenshots/hungerstrike-kitchen-light-f9aa030-1600x1100.png" alt="Current light HungerStrike Kitchen with synthetic stock and selected-item actions" width="900"></p>
+
+The latest [light Kitchen capture](assets/screenshots/hungerstrike-kitchen-light-f9aa030-1600x1100.png) shows the corrected stock rail, selected-item actions, and approved dormouse branding. [Cook now](assets/screenshots/hungerstrike-meals-light-2d5d5ab-1600x900.png) and [Plan next](assets/screenshots/hungerstrike-plan-next-light-2d5d5ab-1600x900.png) were captured from the preceding recipe source; the subsequent `f9aa030` change only corrected Kitchen sizing. See the [exact capture provenance and remaining checks](docs/CURRENT_CAPTURE_PROVENANCE.md). Earlier [light frames](docs/LIGHT_SCREENSHOT_PROVENANCE.md) and the [dark public-version image](docs/SCREENSHOT_PROVENANCE.md) remain preserved as historical evidence.
 
 <p align="center"><a href="docs/workflow.md">Walk through the app</a> · <a href="docs/launch.md">Build and launch</a> · <a href="verification.md">Verification and limits</a> · <a href="assets/branding">Original artwork</a></p>
 
@@ -56,7 +58,7 @@ cargo test --workspace
 
 ## Status and data
 
-This is a **Windows alpha source preview**. The light-interface recovery and current source changes are [recorded here](docs/verification/LIGHT_UI_SOURCE_RECOVERY.md). The earlier `74ca953` build passed 62 workspace tests and saved the linked synthetic frames. The current recipe core passed 53 tests, including eight planning and persistence tests; desktop compilation, interaction, and new screenshots for the latest branding/layout remain pending.
+This is a **Windows alpha source preview**. The light-interface recovery and current source changes are [recorded here](docs/verification/LIGHT_UI_SOURCE_RECOVERY.md). The earlier `74ca953` build passed 62 workspace tests. The recipe core passed 53 tests, including eight planning and persistence tests. The current desktop source built offline and produced the Kitchen frame linked above; the earlier recipe build produced the two Meals frames. Native interaction and a full workspace test run for the current source remain open.
 
  The [2026-10-10 verification record](verification.md) reports 57 passing workspace tests and inspected application-rendered frames on one Windows 11/NVIDIA setup. Native mouse and keyboard click-through, file dialogs, accessibility, other devices, and broader receipt/photo acceptance remain open. The separate [Android preview source branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has no APK release or physical-device validation.
 

@@ -1,6 +1,6 @@
 # HungerStrike light interface screenshot provenance
 
-The six images below are uncomposited frames saved by HungerStrike's built-in Bevy screenshot path on October 14, 2026, from source `74ca953` before the later branding, Kitchen, and recipe-planning edits. They show first-party **SYNTHETIC TEST DATA** in separate isolated local SQLite profiles. No real receipts or personal inventory appear in the images. New screenshots for the current source remain pending.
+The six images below are uncomposited frames saved by HungerStrike's built-in Bevy screenshot path on October 14, 2026, from source `74ca953` before the later branding, Kitchen, and recipe-planning edits. They show first-party **SYNTHETIC TEST DATA** in separate isolated local SQLite profiles. No real receipts or personal inventory appear in the images. The newer frames have [separate provenance](CURRENT_CAPTURE_PROVENANCE.md).
 
 | App-rendered state | PNG | SHA-256 |
 | --- | --- | --- |
