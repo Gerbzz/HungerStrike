@@ -4,7 +4,7 @@ use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::model::{CategoryEdit, LotView, ReceiptDraft, ReceiptEdit};
+use crate::model::{CategoryEdit, LotView, ReceiptDraft, ReceiptEdit, ShoppingItem};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct CostEvent {
@@ -23,6 +23,8 @@ pub(crate) struct State {
     pub schema_version: u32,
     pub receipts: Vec<ReceiptDraft>,
     pub lots: Vec<LotView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub shopping: Vec<ShoppingItem>,
     pub cost_events: Vec<CostEvent>,
     pub refund_without_stock_reversal_cents: i64,
     #[serde(default)]
@@ -47,6 +49,7 @@ impl Default for State {
             schema_version: 1,
             receipts: Vec::new(),
             lots: Vec::new(),
+            shopping: Vec::new(),
             cost_events: Vec::new(),
             refund_without_stock_reversal_cents: 0,
             weekly_budget_cents: None,

@@ -550,6 +550,7 @@ pub fn snapshot(store: &Store) -> Result<AppSnapshot, String> {
         unpriced_lot_count: state.lots.iter().filter(|lot| lot.cost_unknown).count(),
         refund_without_stock_reversal_cents: state.refund_without_stock_reversal_cents,
         lots: state.lots,
+        shopping: state.shopping,
         receipt_items,
         category_edits: state.category_edits,
         receipt_edits: state.receipt_edits,

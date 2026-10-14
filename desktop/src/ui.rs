@@ -4,10 +4,10 @@ use std::sync::Arc;
 use bevy_egui::egui::{self, RichText};
 use hungerstrike_core::{
     budget_view, recategorize_item, review, set_budget, suggest_meals, DraftItem, InventoryAction,
-    MealSuggestion, Period, RecipeCollection, RefundLine, ReplaceOrReconcile,
+    MealSuggestion, Period, Recipe, RecipeCollection, RefundLine, ReplaceOrReconcile,
 };
 
-use crate::{ocr, AppAction, AppState, ReceiptCommit, Tab};
+use crate::{ocr, AppAction, AppState, MealFilter, ReceiptCommit, Tab};
 
 fn money(cents: i64) -> String {
     let sign = if cents < 0 { "-" } else { "" };
@@ -23,6 +23,67 @@ fn brand_texture(ctx: &egui::Context, name: &str, png: &[u8]) -> Option<egui::Te
         egui::ColorImage::from_rgba_unmultiplied(size, decoded.as_raw()),
         egui::TextureOptions::LINEAR,
     ))
+}
+
+fn launch_screen(ctx: &egui::Context, state: &AppState) {
+    egui::CentralPanel::default()
+        .frame(egui::Frame::default().fill(egui::Color32::from_rgb(246, 248, 246)))
+        .show(ctx, |ui| {
+            ui.add_space(((ui.available_height() - 240.0) / 2.0).max(0.0));
+            ui.vertical_centered(|ui| {
+                if let Some(logo) = &state.dormouse_logo {
+                    ui.add(egui::Image::new((logo.id(), egui::vec2(64.0, 64.0))));
+                }
+                ui.add_space(12.0);
+                ui.label(RichText::new("HungerStrike").size(28.0).strong());
+                ui.label("Opening your local kitchen");
+                ui.add_space(36.0);
+                ui.label(
+                    RichText::new("CREATED BY")
+                        .size(11.0)
+                        .color(egui::Color32::from_rgb(84, 103, 105)),
+                );
+                if let Some(logo) = &state.pwds_logo {
+                    ui.add(egui::Image::new((logo.id(), egui::vec2(80.0, 34.0))));
+                } else {
+                    ui.label("PWDS");
+                }
+            });
+        });
+}
+
+fn about_window(ctx: &egui::Context, state: &mut AppState) {
+    let dormouse_logo = state.dormouse_logo.clone();
+    let pwds_logo = state.pwds_logo.clone();
+    egui::Window::new("About HungerStrike")
+        .open(&mut state.show_about)
+        .resizable(false)
+        .collapsible(false)
+        .default_width(310.0)
+        .show(ctx, |ui| {
+            ui.vertical_centered(|ui| {
+                if let Some(logo) = &dormouse_logo {
+                    ui.add(egui::Image::new((logo.id(), egui::vec2(56.0, 56.0))));
+                }
+                ui.label(RichText::new("HungerStrike").size(23.0).strong());
+                ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                ui.label("Your kitchen, from the receipt onward.");
+                ui.add_space(16.0);
+                ui.separator();
+                ui.label(
+                    RichText::new("CREATED BY")
+                        .size(11.0)
+                        .color(egui::Color32::from_rgb(84, 103, 105)),
+                );
+                if let Some(logo) = &pwds_logo {
+                    ui.add(egui::Image::new((logo.id(), egui::vec2(80.0, 34.0))));
+                } else {
+                    ui.label("PWDS");
+                }
+                ui.hyperlink_to("prowebdevsolutions.com", "https://prowebdevsolutions.com");
+                ui.add_space(8.0);
+            });
+        });
 }
 
 fn parse_budget_dollars(input: &str) -> Option<i64> {
@@ -93,16 +154,19 @@ fn dashboard_row(ui: &mut egui::Ui, label: &str, value: String) {
 fn metric(ui: &mut egui::Ui, label: &str, value: String, color: egui::Color32) {
     egui::Frame::group(ui.style())
         .fill(egui::Color32::WHITE)
+        .inner_margin(egui::Margin::symmetric(4, 5))
         .stroke(egui::Stroke::new(
             1.0_f32,
             egui::Color32::from_rgb(218, 226, 225),
         ))
         .show(ui, |ui| {
-            ui.set_min_width(68.0);
-            ui.label(RichText::new(value).size(21.0).strong().color(color));
+            ui.set_min_width(72.0);
+            ui.set_max_width(72.0);
+            ui.set_min_height(50.0);
+            ui.label(RichText::new(value).size(18.0).strong().color(color));
             ui.label(
                 RichText::new(label)
-                    .size(12.0)
+                    .size(11.0)
                     .color(egui::Color32::from_rgb(84, 103, 105)),
             );
         });
@@ -208,9 +272,16 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
         style.visuals.widgets.active.bg_fill = egui::Color32::from_rgb(18, 114, 110);
         ctx.set_style(style);
         state.style_ready = true;
-        // The font atlas is applied on the next egui pass. Defer widgets that
-        // reference the new named medium family until that pass.
+        // Show the launch view while the font atlas is applied on the next pass.
+        launch_screen(ctx, state);
         return;
+    }
+    if !state.startup_complete {
+        if state.scene_dirty {
+            launch_screen(ctx, state);
+            return;
+        }
+        state.startup_complete = true;
     }
     egui::TopBottomPanel::top("header")
         .frame(
@@ -231,22 +302,6 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                         .strong()
                         .color(egui::Color32::from_rgb(226, 244, 237)),
                 );
-                ui.label(
-                    RichText::new("by")
-                        .size(12.0)
-                        .color(egui::Color32::from_rgb(162, 188, 178)),
-                );
-                if let Some(logo) = &state.pwds_logo {
-                    egui::Frame::default()
-                        .fill(egui::Color32::from_rgb(237, 241, 239))
-                        .corner_radius(3)
-                        .inner_margin(egui::Margin::symmetric(4, 1))
-                        .show(ui, |ui| {
-                            ui.add(egui::Image::new((logo.id(), egui::vec2(56.0, 24.0))));
-                        });
-                } else {
-                    ui.label("PWDS");
-                }
                 ui.add_space(16.0);
                 for (label, tab) in [
                     ("Kitchen", Tab::Kitchen),
@@ -268,6 +323,9 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                     }
                 }
                 ui.add_space(18.0);
+                if ui.button("About").clicked() {
+                    state.show_about = true;
+                }
                 ui.label(
                     RichText::new("PRIVATE · LOCAL DATA")
                         .size(13.0)
@@ -275,6 +333,9 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                 );
             });
         });
+    if state.show_about {
+        about_window(ctx, state);
+    }
     if state.tab == Tab::Kitchen {
         egui::SidePanel::left("storage_rail")
             .resizable(false)
@@ -439,6 +500,22 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                     ui.label("Purchase date never sets expiry. A scanned draft never writes inventory by itself.");
                 });
         }
+        if state.tab == Tab::Meals {
+            egui::SidePanel::right("meal_details")
+                .resizable(false)
+                .default_width(340.0)
+                .min_width(315.0)
+                .frame(
+                    egui::Frame::default()
+                        .fill(egui::Color32::from_rgb(248, 250, 249))
+                        .inner_margin(egui::Margin::same(18)),
+                )
+                .show(ctx, |ui| {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| meal_details(ui, state));
+                });
+        }
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::default()
@@ -495,7 +572,7 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
                         })
             })
             .count();
-    ui.horizontal_wrapped(|ui| {
+    ui.horizontal(|ui| {
         metric(
             ui,
             "stock lots",
@@ -552,7 +629,7 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
     let lots = state.snapshot.lots.clone();
     let visible: Vec<_> = lots
         .into_iter()
-        .filter(|lot| state.zone == "all" || lot.zone == state.zone)
+        .filter(|lot| lot.quantity != "0" && (state.zone == "all" || lot.zone == state.zone))
         .collect();
     ui.label(
         RichText::new(format!("{} confirmed stock lot(s) shown", visible.len()))
@@ -573,28 +650,30 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
         });
     }
     for lot in &visible {
-        egui::Frame::group(ui.style())
+        let selected = state.lot_id == lot.id;
+        let row = egui::Frame::group(ui.style())
+            .fill(if selected {
+                egui::Color32::from_rgb(231, 243, 239)
+            } else {
+                egui::Color32::WHITE
+            })
+            .stroke(egui::Stroke::new(
+                1.0,
+                if selected {
+                    egui::Color32::from_rgb(17, 110, 107)
+                } else {
+                    egui::Color32::from_rgb(217, 226, 222)
+                },
+            ))
             .inner_margin(egui::Margin::symmetric(8, 5))
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 2.0;
                 ui.set_min_width(ui.available_width().min(390.0));
-                ui.horizontal_wrapped(|ui| {
-                    if ui
-                        .selectable_label(
-                            state.lot_id == lot.id,
-                            RichText::new(&lot.name)
-                                .strong()
-                                .color(if state.lot_id == lot.id {
-                                    egui::Color32::WHITE
-                                } else {
-                                    egui::Color32::from_rgb(39, 58, 59)
-                                }),
-                        )
-                        .clicked()
-                    {
-                        let _ = state.dispatch(AppAction::SelectLot(lot.id.clone()));
-                    }
-                    ui.label(format!("{} {}", lot.quantity, lot.unit));
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(&lot.name).strong());
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(format!("{} {}", lot.quantity, lot.unit));
+                    });
                 });
                 ui.label(
                     RichText::new(format!(
@@ -611,6 +690,16 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
                     .color(egui::Color32::from_rgb(82, 101, 102)),
                 );
             });
+        if ui
+            .interact(
+                row.response.rect,
+                ui.id().with(&lot.id),
+                egui::Sense::click(),
+            )
+            .clicked()
+        {
+            let _ = state.dispatch(AppAction::SelectLot(lot.id.clone()));
+        }
     }
     ui.separator();
     egui::CollapsingHeader::new("Edit spending categories").show(ui, |ui| {
@@ -669,62 +758,7 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
             .strong()
             .color(egui::Color32::from_rgb(24, 106, 101)),
     );
-    ui.heading(match state.zone.as_str() {
-        "fridge" => "Refrigerator",
-        "freezer" => "Freezer drawer",
-        "pantry" => "Pantry",
-        _ => "All storage",
-    });
-    let visible: Vec<_> = state
-        .snapshot
-        .lots
-        .iter()
-        .filter(|lot| lot.quantity != "0" && (state.zone == "all" || lot.zone == state.zone))
-        .collect();
-    ui.label(format!("{} confirmed items in this view", visible.len()));
-    let today = chrono::NaiveDate::parse_from_str(&state.reference_date, "%Y-%m-%d").ok();
-    let use_soon: Vec<_> = visible
-        .iter()
-        .filter(|lot| {
-            today
-                .zip(
-                    lot.expiry_date
-                        .as_deref()
-                        .and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()),
-                )
-                .is_some_and(|(now, expiry)| {
-                    (0..=3).contains(&expiry.signed_duration_since(now).num_days())
-                })
-        })
-        .take(3)
-        .collect();
-    egui::Frame::group(ui.style())
-        .fill(egui::Color32::WHITE)
-        .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            ui.label(
-                RichText::new(format!("{} use soon", use_soon.len()))
-                    .size(20.0)
-                    .strong()
-                    .color(egui::Color32::from_rgb(160, 96, 30)),
-            );
-            if use_soon.is_empty() {
-                ui.label("No known expiry in the next three days.");
-            } else {
-                for lot in &use_soon {
-                    ui.label(format!(
-                        "{}  /  {}",
-                        lot.name,
-                        lot.expiry_date.as_deref().unwrap_or("unknown")
-                    ));
-                }
-            }
-        });
-    ui.add_space(18.0);
-    ui.separator();
     ui.heading("Selected item");
-    ui.label("Choose food in the scene or storage list.");
-    ui.add_space(8.0);
     let selected = state
         .snapshot
         .lots
@@ -799,8 +833,37 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
     }
     ui.add_space(14.0);
     ui.separator();
-    ui.label(RichText::new("HOW IT WORKS").size(11.0).strong());
-    ui.label("Only confirmed receipt items appear on shelves. Unknown costs and dates stay marked as unknown.");
+    let today = chrono::NaiveDate::parse_from_str(&state.reference_date, "%Y-%m-%d").ok();
+    let use_soon: Vec<_> = state
+        .snapshot
+        .lots
+        .iter()
+        .filter(|lot| lot.quantity != "0" && (state.zone == "all" || lot.zone == state.zone))
+        .filter(|lot| {
+            today
+                .zip(
+                    lot.expiry_date
+                        .as_deref()
+                        .and_then(|date| chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()),
+                )
+                .is_some_and(|(now, expiry)| {
+                    (0..=3).contains(&expiry.signed_duration_since(now).num_days())
+                })
+        })
+        .collect();
+    egui::CollapsingHeader::new(format!("Use soon in this view ({})", use_soon.len())).show(
+        ui,
+        |ui| {
+            for lot in use_soon {
+                ui.label(format!(
+                    "{}  ·  {}",
+                    lot.name,
+                    lot.expiry_date.as_deref().unwrap_or("unknown")
+                ));
+            }
+            ui.label("Dates are planning cues; check food condition before use.");
+        },
+    );
 }
 
 fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
@@ -1133,126 +1196,269 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
 }
 
 fn meals(ui: &mut egui::Ui, state: &mut AppState) {
-    ui.heading("Meals from your stock");
-    ui.label("Suggestions use confirmed quantities. Estimated cost comes from remaining lot cost; unknown prices stay unknown.");
+    ui.set_max_width(810.0);
+    ui.heading("Meals from your kitchen");
+    ui.label("Six original recipes bundled locally. Suggestions use confirmed fridge, freezer, and pantry stock.");
     ui.horizontal(|ui| {
-        ui.label("Today YYYY-MM-DD");
+        ui.label("Plan for YYYY-MM-DD");
         ui.text_edit_singleline(&mut state.reference_date);
     });
-    let recipes: Result<RecipeCollection, _> =
-        serde_json::from_str(include_str!("../../assets/recipes.json"));
-    let result = recipes.map_err(|e| e.to_string()).and_then(|collection| {
-        suggest_meals(&state.snapshot, &collection.recipes, &state.reference_date)
-    });
-    match result {
-        Ok(meals) => {
-            let ready = meals.iter().filter(|meal| meal.available).count();
-            let use_soon = meals
-                .iter()
-                .filter(|meal| !meal.soon_expiring.is_empty())
-                .count();
-            ui.horizontal(|ui| {
-                metric(
-                    ui,
-                    "cook now",
-                    ready.to_string(),
-                    egui::Color32::from_rgb(16, 112, 100),
-                );
-                metric(
-                    ui,
-                    "use soon",
-                    use_soon.to_string(),
-                    egui::Color32::from_rgb(160, 96, 30),
-                );
-            });
-            if state.snapshot.lots.is_empty() {
-                ui.label("Confirm a receipt to see which meals you can cook from your own stock.");
-            }
-            ui.columns(2, |columns| {
-                for (index, meal) in meals.iter().enumerate() {
-                    meal_card(&mut columns[index % 2], meal, index);
-                }
-            });
-        }
+    let (_, suggestions) = match recipe_suggestions(state) {
+        Ok(result) => result,
         Err(error) => {
             ui.label(error);
+            return;
+        }
+    };
+    let cook_count = suggestions.iter().filter(|meal| meal.available).count();
+    let soon_count = suggestions
+        .iter()
+        .filter(|meal| meal.available && !meal.soon_expiring.is_empty())
+        .count();
+    let plan_count = suggestions.len() - cook_count;
+    ui.horizontal_wrapped(|ui| {
+        for (label, filter, count) in [
+            ("Cook now", MealFilter::CookNow, cook_count),
+            ("Use soon", MealFilter::UseSoon, soon_count),
+            ("Plan next", MealFilter::PlanNext, plan_count),
+        ] {
+            if ui
+                .selectable_label(state.meal_filter == filter, format!("{label}  {count}"))
+                .clicked()
+            {
+                state.meal_filter = filter;
+                state.selected_recipe_id = None;
+            }
+        }
+    });
+    if state.meal_filter == MealFilter::UseSoon {
+        ui.label("Dates are user-entered planning cues. Check food condition before cooking.");
+    }
+    let visible: Vec<_> = suggestions
+        .iter()
+        .filter(|meal| in_meal_filter(meal, state.meal_filter))
+        .collect();
+    if visible.is_empty() {
+        ui.label(match state.meal_filter {
+            MealFilter::CookNow => "No complete recipe from current usable stock. Try Plan next.",
+            MealFilter::UseSoon => {
+                "No complete recipe uses stock with a known date in the next three days."
+            }
+            MealFilter::PlanNext => "All bundled recipes are ready from your stock.",
+        });
+    }
+    for meal in visible {
+        meal_card(ui, meal, state);
+    }
+    if state.meal_filter == MealFilter::PlanNext {
+        ui.add_space(10.0);
+        ui.separator();
+        ui.heading("Shopping list");
+        ui.label(
+            "Saved on this device. Missing grocery prices are unknown until you review a purchase.",
+        );
+        let shopping = state.snapshot.shopping.clone();
+        if shopping.is_empty() {
+            ui.label("Choose a planned recipe to add its missing quantities.");
+        }
+        for item in shopping {
+            ui.horizontal(|ui| {
+                ui.label(format!("{}  ·  {} {}", item.name, item.quantity, item.unit));
+                if ui.button("Remove").clicked() {
+                    if let Err(error) = state.dispatch(AppAction::RemoveShopping {
+                        name: item.name,
+                        unit: item.unit,
+                    }) {
+                        state.message = error;
+                    }
+                }
+            });
         }
     }
 }
 
-fn meal_card(ui: &mut egui::Ui, meal: &MealSuggestion, index: usize) {
-    let (cost_label, status) = match meal.estimate_status.as_str() {
-        "complete" => ("Estimated stock cost", "ingredients available"),
-        "partial_missing_ingredient" => ("Known stock cost", "more ingredients needed"),
-        "unknown_cost" => ("Stock cost", "unknown cost in stock"),
-        _ => ("Stock cost", "review estimate"),
-    };
+fn recipe_suggestions(state: &AppState) -> Result<(Vec<Recipe>, Vec<MealSuggestion>), String> {
+    let collection: RecipeCollection =
+        serde_json::from_str(include_str!("../../assets/recipes.json"))
+            .map_err(|error| error.to_string())?;
+    let suggestions = suggest_meals(&state.snapshot, &collection.recipes, &state.reference_date)?;
+    Ok((collection.recipes, suggestions))
+}
+
+fn in_meal_filter(meal: &MealSuggestion, filter: MealFilter) -> bool {
+    match filter {
+        MealFilter::CookNow => meal.available,
+        MealFilter::UseSoon => meal.available && !meal.soon_expiring.is_empty(),
+        MealFilter::PlanNext => !meal.available,
+    }
+}
+
+fn meal_card(ui: &mut egui::Ui, meal: &MealSuggestion, state: &mut AppState) {
+    let have = meal
+        .ingredients
+        .iter()
+        .filter(|item| item.missing_quantity == "0")
+        .count();
+    let cost = meal
+        .estimate_cents
+        .map(money)
+        .unwrap_or_else(|| "unknown".into());
+    let selected = state.selected_recipe_id.as_deref() == Some(meal.id.as_str());
     egui::Frame::group(ui.style())
-        .fill(egui::Color32::WHITE)
+        .fill(if selected {
+            egui::Color32::from_rgb(231, 243, 239)
+        } else {
+            egui::Color32::WHITE
+        })
         .stroke(egui::Stroke::new(
             1.0_f32,
             egui::Color32::from_rgb(217, 226, 222),
         ))
         .show(ui, |ui| {
-            ui.set_min_width(ui.available_width() - 18.0);
-            ui.label(
-                RichText::new(if meal.available {
-                    "READY FROM STOCK"
-                } else {
-                    "NEEDS INGREDIENTS"
-                })
-                .size(11.0)
-                .strong()
-                .color(if meal.available {
-                    egui::Color32::from_rgb(16, 112, 100)
-                } else {
-                    egui::Color32::from_rgb(160, 96, 30)
-                }),
-            );
-            ui.label(RichText::new(&meal.name).size(21.0).strong());
-            ui.horizontal_wrapped(|ui| {
-                ui.strong(format!(
-                    "{}  {}",
-                    cost_label,
-                    meal.estimate_cents
-                        .map(money)
-                        .unwrap_or_else(|| "unknown".into())
-                ));
-                ui.label(format!("{} servings  /  {}", meal.servings, status));
+            ui.set_min_width((ui.available_width() - 18.0).max(250.0));
+            ui.set_min_height(82.0);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(&meal.name).size(18.0).strong());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("View recipe").clicked() {
+                        state.selected_recipe_id = Some(meal.id.clone());
+                    }
+                });
             });
-            if !meal.soon_expiring.is_empty() {
+            ui.label(format!(
+                "{} serving{}  ·  have {have}/{} ingredients  ·  stock cost {cost}",
+                meal.servings,
+                if meal.servings == 1 { "" } else { "s" },
+                meal.ingredients.len()
+            ));
+            if !meal.available {
+                ui.label("Missing groceries are unpriced");
+            } else if !meal.soon_expiring.is_empty() {
                 ui.colored_label(
                     egui::Color32::from_rgb(160, 96, 30),
                     format!("Use soon: {}", meal.soon_expiring.join(", ")),
                 );
             }
-            if meal.expiry_unknown {
-                ui.label("Some expiry dates are unknown.");
-            }
-            ui.separator();
-            ui.label(RichText::new("INGREDIENTS").size(11.0).strong());
-            for ingredient in &meal.ingredients {
-                ui.label(format!(
-                    "{}  /  use {} {}  /  missing {}  /  {}",
-                    ingredient.name,
-                    ingredient.stock_used_quantity,
-                    ingredient.unit,
-                    ingredient.missing_quantity,
-                    if ingredient.cost_unknown {
-                        "cost unknown".into()
-                    } else {
-                        money(ingredient.estimated_cost_cents)
-                    }
-                ));
-            }
-            egui::CollapsingHeader::new("Cooking steps")
-                .default_open(index < 2)
-                .show(ui, |ui| {
-                    for step in &meal.steps {
-                        ui.label(step);
-                    }
-                });
         });
+}
+
+fn meal_details(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(RichText::new("MEALS / DETAILS").size(11.0).strong());
+    let (recipes, suggestions) = match recipe_suggestions(state) {
+        Ok(result) => result,
+        Err(error) => {
+            ui.label(error);
+            return;
+        }
+    };
+    let selected = state
+        .selected_recipe_id
+        .as_deref()
+        .and_then(|id| {
+            suggestions
+                .iter()
+                .find(|meal| meal.id == id && in_meal_filter(meal, state.meal_filter))
+        })
+        .or_else(|| {
+            suggestions
+                .iter()
+                .find(|meal| in_meal_filter(meal, state.meal_filter))
+        });
+    let Some(meal) = selected else {
+        ui.label("Choose a recipe from the list.");
+        return;
+    };
+    let Some(recipe) = recipes.iter().find(|recipe| recipe.id == meal.id).cloned() else {
+        return;
+    };
+    ui.heading(meal.name.as_str());
+    ui.label(format!(
+        "{} serving{}",
+        meal.servings,
+        if meal.servings == 1 { "" } else { "s" }
+    ));
+    ui.label(format!(
+        "Recorded stock cost: {}",
+        meal.estimate_cents
+            .map(money)
+            .unwrap_or_else(|| "unknown".into())
+    ));
+    if !meal.available {
+        ui.label("Missing grocery prices are unknown; this is not a purchase estimate.");
+    }
+    if !meal.soon_expiring.is_empty() {
+        ui.colored_label(
+            egui::Color32::from_rgb(160, 96, 30),
+            format!("Use soon: {}", meal.soon_expiring.join(", ")),
+        );
+        ui.label("Check dates and food condition before cooking.");
+    }
+    ui.separator();
+    ui.strong("Ingredients");
+    for ingredient in &meal.ingredients {
+        ui.label(format!(
+            "{}  ·  {} {} needed",
+            ingredient.name, ingredient.required_quantity, ingredient.unit
+        ));
+        ui.label(format!(
+            "Have {} {}{}",
+            ingredient.stock_used_quantity,
+            ingredient.unit,
+            if ingredient.missing_quantity == "0" {
+                String::new()
+            } else {
+                format!(
+                    "  ·  need {} {}",
+                    ingredient.missing_quantity, ingredient.unit
+                )
+            }
+        ));
+    }
+    if meal.available {
+        ui.separator();
+        ui.strong("Stock to consume when you cook");
+        for lot in &meal.consumption {
+            ui.label(format!(
+                "{}  ·  {} {} from {}",
+                lot.name, lot.quantity, lot.unit, lot.zone
+            ));
+        }
+    }
+    ui.separator();
+    ui.strong("Directions");
+    for (index, step) in meal.steps.iter().enumerate() {
+        ui.label(format!("{}. {}", index + 1, step));
+    }
+    ui.add_space(8.0);
+    if meal.available {
+        if ui.button("Cook and update stock").clicked() {
+            if let Err(error) = state.dispatch(AppAction::CookRecipe(recipe)) {
+                state.message = error;
+            }
+        }
+    } else {
+        if let Ok(store) = state.store.lock() {
+            let mut over_budget = false;
+            for (period, label) in [(Period::Week, "Weekly"), (Period::Month, "Monthly")] {
+                if let Ok(view) =
+                    budget_view(&store, &state.reference_date, period, state.week_start)
+                {
+                    if let Some(remaining) = view.remaining_budget_cents {
+                        ui.label(format!("{label} budget remaining: {}", money(remaining)));
+                        over_budget |= remaining <= 0;
+                    }
+                }
+            }
+            if over_budget {
+                ui.label("Review your budget before buying missing items.");
+            }
+        }
+        if ui.button("Add missing to shopping list").clicked() {
+            if let Err(error) = state.dispatch(AppAction::AddMissingToShopping(recipe)) {
+                state.message = error;
+            }
+        }
+    }
 }
 
 fn spending(ui: &mut egui::Ui, state: &mut AppState) {

@@ -5,6 +5,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     inventory::decimal,
+    model::ShoppingItem,
     receipt::review,
     store::{State, Store},
 };
@@ -127,6 +128,19 @@ fn validate_state(state: &State) -> Result<(), String> {
             return Err("invalid inventory lot in backup".into());
         }
     }
+    let mut shopping_keys = HashSet::new();
+    for item in &state.shopping {
+        if item.name.trim().is_empty()
+            || item.unit.trim().is_empty()
+            || decimal(&item.quantity)? <= rust_decimal::Decimal::ZERO
+            || !shopping_keys.insert((
+                item.name.trim().to_lowercase(),
+                item.unit.trim().to_lowercase(),
+            ))
+        {
+            return Err("invalid shopping item in backup".into());
+        }
+    }
     if state.cost_events.iter().any(|event| event.amount_cents < 0) {
         return Err("invalid cost event in backup".into());
     }
@@ -178,6 +192,25 @@ pub fn preview_import(store: &Store, bytes: &[u8]) -> Result<ImportPreview, Stri
     })
 }
 
+fn merge_shopping(existing: &mut State, incoming: Vec<ShoppingItem>) -> Result<bool, String> {
+    let mut changed = false;
+    for item in incoming {
+        if let Some(current) = existing.shopping.iter_mut().find(|current| {
+            current.name.eq_ignore_ascii_case(&item.name)
+                && current.unit.eq_ignore_ascii_case(&item.unit)
+        }) {
+            if decimal(&item.quantity)? > decimal(&current.quantity)? {
+                current.quantity = item.quantity;
+                changed = true;
+            }
+        } else {
+            existing.shopping.push(item);
+            changed = true;
+        }
+    }
+    Ok(changed)
+}
+
 pub fn apply_import(
     store: &mut Store,
     bytes: &[u8],
@@ -203,6 +236,11 @@ pub fn apply_import(
                 })
                 .count();
             if overlap == incoming.receipts.len() {
+                if merge_shopping(&mut existing, incoming.shopping)? {
+                    validate_state(&existing)?;
+                    store.save(&existing)?;
+                    return Ok(ApplyOutcome::Imported);
+                }
                 return Ok(ApplyOutcome::Duplicate);
             }
             if overlap > 0 {
@@ -228,6 +266,7 @@ pub fn apply_import(
             }
             existing.receipts.extend(incoming.receipts);
             existing.lots.extend(incoming.lots);
+            merge_shopping(&mut existing, incoming.shopping)?;
             existing.cost_events.extend(incoming.cost_events);
             existing.refund_without_stock_reversal_cents = existing
                 .refund_without_stock_reversal_cents

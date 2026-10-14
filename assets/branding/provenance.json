@@ -1,21 +1,70 @@
 {
   "app": "HungerStrike",
   "asset": "assets/branding/HungerStrike.png",
-  "method": "Lossless rectangular extraction of original pixels with ImageMagick. No scaling, recoloring, tracing, generation, transparency fabrication or animal changes. Original cream outside rounded corners retained. Labels excluded.",
-  "coordinate_system": "Origin top-left; crop bounds [left, top, right, bottom), right/bottom exclusive.",
-  "source_sha256": "511411a7067620626aa7ca176ef259a994395a391128db66d7c80c9418c4e3b2",
-  "crop_bounds": [
-    1360,
-    0,
-    2016,
-    656
-  ],
+  "method": "Measured rounded alpha mask applied to the original 656x656 logo tile, then translated by whole pixels to center its visible bounds. Original visible RGB and masked visible RGBA were verified unchanged.",
+  "source_tile": {
+    "repository": "Gerbzz/HungerStrike",
+    "commit": "c6cda8bfbbbc2e672661c16602fd29cef1862662",
+    "path": "assets/branding/HungerStrike.png",
+    "sha256": "6f56d9a1587981d2f6dfafcaa79ed6480b29c27d091d31ca8d5f9d1778b2393e",
+    "git_blob_sha": "96492db46406baac04d7cf9c77dd99c1f7d7dcbf"
+  },
+  "mask_and_centering": {
+    "inset_pixels": 1.5,
+    "masked_alpha_bbox": [
+      31,
+      25,
+      650,
+      630
+    ],
+    "centered_alpha_bbox": [
+      18,
+      25,
+      637,
+      630
+    ],
+    "integer_translation": [
+      -13,
+      0
+    ],
+    "padding_ltrb": [
+      18,
+      25,
+      19,
+      26
+    ],
+    "original_visible_rgb_exact": true,
+    "masked_visible_rgba_exact": true,
+    "transparent_corners": true
+  },
   "dimensions": [
     656,
     656
   ],
-  "sha256": "6f56d9a1587981d2f6dfafcaa79ed6480b29c27d091d31ca8d5f9d1778b2393e",
-  "decoded_rgb_sha256": "6f60c5d51b3fcc751056e41518672402d2575891b9328bca5cddfe9e5cccee11",
-  "pixel_equality_verified": true,
-  "git_blob_sha": "96492db46406baac04d7cf9c77dd99c1f7d7dcbf"
+  "mode": "RGBA",
+  "sha256": "1652a8d642484ef78c6e4656c44d44ea132e595fcee3a3f92c1dd5b3d41d23c1",
+  "decoded_rgba_sha256": "d1598d3121128d086dcb1962cce555a877319d5d1e640acb9cb3c2062686c9c1",
+  "git_blob_sha": "53ca63558edfdbed30ec6e5572c82710797b52cb",
+  "tool": "ImageMagick 7.1.2-34 Q16 x64",
+  "original_tile_provenance": {
+    "app": "HungerStrike",
+    "asset": "assets/branding/HungerStrike.png",
+    "method": "Lossless rectangular extraction of original pixels with ImageMagick. No scaling, recoloring, tracing, generation, transparency fabrication or animal changes. Original cream outside rounded corners retained. Labels excluded.",
+    "coordinate_system": "Origin top-left; crop bounds [left, top, right, bottom), right/bottom exclusive.",
+    "source_sha256": "511411a7067620626aa7ca176ef259a994395a391128db66d7c80c9418c4e3b2",
+    "crop_bounds": [
+      1360,
+      0,
+      2016,
+      656
+    ],
+    "dimensions": [
+      656,
+      656
+    ],
+    "sha256": "6f56d9a1587981d2f6dfafcaa79ed6480b29c27d091d31ca8d5f9d1778b2393e",
+    "decoded_rgb_sha256": "6f60c5d51b3fcc751056e41518672402d2575891b9328bca5cddfe9e5cccee11",
+    "pixel_equality_verified": true,
+    "git_blob_sha": "96492db46406baac04d7cf9c77dd99c1f7d7dcbf"
+  }
 }

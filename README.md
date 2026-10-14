@@ -15,9 +15,7 @@
 
 HungerStrike brings reviewed purchases, local stock, meal ideas, and spending into one Windows desktop workspace. Every receipt stays a draft until you confirm what it says.
 
-![Current light HungerStrike Kitchen with the original dormouse and PWDS logos, stocked fridge, and complete selected inventory details](assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1600x1100.png)
-
-*New app-rendered light interface from source `74ca953`, using synthetic stock. The 1600 x 1100 Kitchen frame shows the complete inspector; the [1600 x 900](assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1600.png) and [1280 x 720](assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1280.png) frames preserve the shorter viewport views. [Capture provenance and limits](docs/LIGHT_SCREENSHOT_PROVENANCE.md). See the new [receipt review](assets/screenshots/hungerstrike-receipt-light-74ca953.png), [meal ideas](assets/screenshots/hungerstrike-meals-light-74ca953.png), and [spending view](assets/screenshots/hungerstrike-spending-light-74ca953.png). The [older dark public-version capture](assets/screenshots/hungerstrike-kitchen-current.png) and its [provenance](docs/SCREENSHOT_PROVENANCE.md) remain available.*
+The current branch has newer branding, Kitchen, and recipe-planning source. Its desktop build and new app-rendered screenshots are pending. The [previously verified light Kitchen](assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1600x1100.png), [receipt review](assets/screenshots/hungerstrike-receipt-light-74ca953.png), [Meals](assets/screenshots/hungerstrike-meals-light-74ca953.png), and [spending](assets/screenshots/hungerstrike-spending-light-74ca953.png) images came from source `74ca953` before these changes; see their [capture provenance](docs/LIGHT_SCREENSHOT_PROVENANCE.md). The [older dark public-version image](assets/screenshots/hungerstrike-kitchen-current.png) is also preserved with its [provenance](docs/SCREENSHOT_PROVENANCE.md).
 
 <p align="center"><a href="docs/workflow.md">Walk through the app</a> · <a href="docs/launch.md">Build and launch</a> · <a href="verification.md">Verification and limits</a> · <a href="assets/branding">Original artwork</a></p>
 
@@ -33,7 +31,7 @@ Browse the fridge, freezer, and pantry in the 3D scene or the matching stock lis
 
 ### Plan meals from confirmed stock
 
-Meal suggestions use the quantities on hand. Ingredient availability, use-soon cues, and estimated remaining-lot costs are shown together; an unknown cost is not filled in with a guess.
+Six original recipes are bundled locally. Cook now uses sufficient confirmed stock; Use soon prioritizes recipes using dated stock; Plan next shows missing quantities and saves selected needs to a local shopping list. The selected recipe previews the exact lots before an explicit Cook action updates inventory. Recorded stock costs and known budgets are shown, while missing-grocery prices remain unknown.
 
 ### Keep spending and stock use distinct
 
@@ -58,7 +56,7 @@ cargo test --workspace
 
 ## Status and data
 
-This is a **Windows alpha source preview**. The newer light interface and its original artwork are [recorded here](docs/verification/LIGHT_UI_SOURCE_RECOVERY.md). The source-matched build passed 62 workspace tests and saved the new synthetic frames above; native interaction remains a separate check.
+This is a **Windows alpha source preview**. The light-interface recovery and current source changes are [recorded here](docs/verification/LIGHT_UI_SOURCE_RECOVERY.md). The earlier `74ca953` build passed 62 workspace tests and saved the linked synthetic frames. The current recipe core passed 53 tests, including eight planning and persistence tests; desktop compilation, interaction, and new screenshots for the latest branding/layout remain pending.
 
  The [2026-10-10 verification record](verification.md) reports 57 passing workspace tests and inspected application-rendered frames on one Windows 11/NVIDIA setup. Native mouse and keyboard click-through, file dialogs, accessibility, other devices, and broader receipt/photo acceptance remain open. The separate [Android preview source branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has no APK release or physical-device validation.
 
@@ -70,4 +68,4 @@ Explore the other [PWDS Strike repositories](https://github.com/Gerbzz?tab=repos
 
 ## PWDS brand artwork
 
-The company mark in this masthead is the existing [official PWDS logo](https://github.com/Gerbzz/PWDS-Website/blob/main/public/prowebdevsolutions-logo.png), with the [official orange display asset](https://prowebdevsolutions.com/images/prowebdevsolutions-logo-orange.svg) for dark backgrounds. Any app logo above it remains the original Strike suite artwork.
+The company mark in this masthead is the existing [official PWDS logo](https://github.com/Gerbzz/PWDS-Website/blob/main/public/prowebdevsolutions-logo.png), with the [official orange display asset](https://prowebdevsolutions.com/images/prowebdevsolutions-logo-orange.svg) for dark backgrounds. The HungerStrike mark above it is the centered transparent version of the original dormouse artwork, with [provenance](assets/branding/provenance.json). In the desktop source, PWDS attribution appears on launch and About surfaces, while the working header carries HungerStrike's own name and icon.

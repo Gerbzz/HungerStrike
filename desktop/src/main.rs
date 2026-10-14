@@ -6,10 +6,11 @@ use bevy::prelude::*;
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
 use hungerstrike_core::{
-    apply_import, budget_view, confirm_receipt, confirm_separate_purchase, correct_receipt,
-    export_backup, matching_source_receipt, parse_text, preview_import, record_inventory_action,
-    restore_last_import, review, set_budget, snapshot, AppSnapshot, ImportPreview, InventoryAction,
-    Period, ReceiptDraft, ReplaceOrReconcile, Store,
+    add_recipe_missing_to_shopping, apply_import, budget_view, confirm_receipt,
+    confirm_separate_purchase, cook_recipe, correct_receipt, export_backup,
+    matching_source_receipt, parse_text, preview_import, record_inventory_action,
+    remove_shopping_item, restore_last_import, review, set_budget, snapshot, AppSnapshot,
+    ImportPreview, InventoryAction, Period, ReceiptDraft, Recipe, ReplaceOrReconcile, Store,
 };
 use std::{
     path::PathBuf,
@@ -29,6 +30,13 @@ enum Tab {
     Data,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MealFilter {
+    CookNow,
+    UseSoon,
+    PlanNext,
+}
+
 #[derive(Clone, Copy)]
 enum ReceiptCommit {
     New,
@@ -41,6 +49,9 @@ enum AppAction {
     SelectZone(String),
     SelectLot(String),
     Inventory(InventoryAction),
+    CookRecipe(Recipe),
+    AddMissingToShopping(Recipe),
+    RemoveShopping { name: String, unit: String },
     ParseReceipt,
     StartOcr(Vec<u8>),
     Commit(ReceiptCommit),
@@ -79,6 +90,10 @@ struct AppState {
     separate_ack: bool,
     ocr_task: Option<OcrTask>,
     style_ready: bool,
+    startup_complete: bool,
+    show_about: bool,
+    meal_filter: MealFilter,
+    selected_recipe_id: Option<String>,
     dormouse_logo: Option<bevy_egui::egui::TextureHandle>,
     pwds_logo: Option<bevy_egui::egui::TextureHandle>,
     scene_dirty: bool,
@@ -120,6 +135,10 @@ impl AppState {
             separate_ack: false,
             ocr_task: None,
             style_ready: false,
+            startup_complete: false,
+            show_about: false,
+            meal_filter: MealFilter::CookNow,
+            selected_recipe_id: None,
             dormouse_logo: None,
             pwds_logo: None,
             scene_dirty: true,
@@ -240,6 +259,33 @@ impl AppState {
                 }
                 self.refresh()?;
                 self.message = "Inventory updated.".into();
+            }
+            AppAction::CookRecipe(recipe) => {
+                {
+                    let mut store = self.store.lock().map_err(|e| e.to_string())?;
+                    cook_recipe(&mut store, &recipe, &self.reference_date)?;
+                }
+                self.refresh()?;
+                self.message = format!("Cooked {}. Confirmed stock was updated.", recipe.name);
+            }
+            AppAction::AddMissingToShopping(recipe) => {
+                {
+                    let mut store = self.store.lock().map_err(|e| e.to_string())?;
+                    add_recipe_missing_to_shopping(&mut store, &recipe, &self.reference_date)?;
+                }
+                self.refresh()?;
+                self.message = format!(
+                    "Missing ingredients for {} added to your local shopping list.",
+                    recipe.name
+                );
+            }
+            AppAction::RemoveShopping { name, unit } => {
+                {
+                    let mut store = self.store.lock().map_err(|e| e.to_string())?;
+                    remove_shopping_item(&mut store, &name, &unit)?;
+                }
+                self.refresh()?;
+                self.message = "Shopping item removed.".into();
             }
             AppAction::ParseReceipt => {
                 self.set_draft_from_text(self.raw_text.clone())?;
@@ -385,7 +431,17 @@ fn main() {
         seed_unknown_visual_capture(&mut state).expect("seed synthetic unknown-item capture");
     } else if matches!(
         demo.as_deref(),
-        Some("kitchen" | "pantry" | "freezer" | "all" | "selected" | "meals" | "spending")
+        Some(
+            "kitchen"
+                | "pantry"
+                | "freezer"
+                | "all"
+                | "selected"
+                | "meals"
+                | "spending"
+                | "about"
+                | "plan-next"
+        )
     ) {
         state.raw_text =
             include_str!("../../core/tests/fixtures/receipts/R001-purchase.txt").into();
@@ -419,7 +475,7 @@ fn main() {
         }
         state.refresh().expect("refresh synthetic state");
         let tab = match demo.as_deref() {
-            Some("meals") => Tab::Meals,
+            Some("meals" | "plan-next") => Tab::Meals,
             Some("spending") => Tab::Spending,
             _ => Tab::Kitchen,
         };
@@ -453,6 +509,11 @@ fn main() {
             }
         }
         state.message = "SYNTHETIC TEST DATA — application-rendered verification capture".into();
+        state.show_about = demo.as_deref() == Some("about");
+        if demo.as_deref() == Some("plan-next") {
+            state.meal_filter = MealFilter::PlanNext;
+            state.selected_recipe_id = Some("tomato-pasta".into());
+        }
     }
     let resolution = std::env::var("HUNGERSTRIKE_CAPTURE_SIZE")
         .ok()
