@@ -1,0 +1,19 @@
+# HungerStrike light interface screenshot provenance
+
+The five images below are new, uncomposited frames saved by HungerStrike's built-in Bevy screenshot path on October 14, 2026. They show first-party **SYNTHETIC TEST DATA** in separate isolated local SQLite profiles. No real receipts or personal inventory appear in the images.
+
+| App-rendered state | PNG | SHA-256 |
+| --- | --- | --- |
+| Selected Kitchen, 1600 x 900 | [`hungerstrike-kitchen-light-selected-74ca953-1600.png`](../assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1600.png) | `13228FBB95D146864A86209016FE888767AA50D087ED500C1B3E5A28457ABE9C` |
+| Selected Kitchen, 1280 x 720 | [`hungerstrike-kitchen-light-selected-74ca953-1280.png`](../assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1280.png) | `1DA18B1A6EC33E81A29447C6FD44A0FEFEA36A39980E1DFD5CEF280826C7C8A5` |
+| Receipt review, 1600 x 900 | [`hungerstrike-receipt-light-74ca953.png`](../assets/screenshots/hungerstrike-receipt-light-74ca953.png) | `248D8A7CEA2647478617A7DB430F517EA501E14A06D1140D4925AD4236CCC9B0` |
+| Meals, 1600 x 900 | [`hungerstrike-meals-light-74ca953.png`](../assets/screenshots/hungerstrike-meals-light-74ca953.png) | `33BB766CAF85DBC17ABBFCA14DC93632AFF492E777AED92CB672B616F39B10CF` |
+| Spending, 1600 x 900 | [`hungerstrike-spending-light-74ca953.png`](../assets/screenshots/hungerstrike-spending-light-74ca953.png) | `BEB9BC7561BA5C3D244BCD630D5D9A1B9B771A42F2D13E65C53BC4AFDD545B51` |
+
+The executable was built offline, locked, and single-job from source commit `74ca95366223cae4d946ca9a10250708e83d41c8` with the existing Cargo cache. Only `hungerstrike-core` and `hungerstrike-rust-desktop` compiled. The release build finished in 41.70 seconds; executable SHA-256 is `B98E62E7DE8604AF70C52B754F2FA149CA30AEEEEECD9884FA90BDA0C07D6DD7` (84,654,592 bytes). `cargo test --workspace --offline --locked -j 1` then passed 62 tests: 5 backup, 6 ledger, 4 projections, 6 receipt fixtures, 24 review regressions, and 17 desktop tests.
+
+Each capture set `HUNGERSTRIKE_DATA_DIR` to a fresh isolated profile parent, `HUNGERSTRIKE_ASSETS_DIR` to this branch's `assets`, `HUNGERSTRIKE_CAPTURE_DEMO` to the named state, `HUNGERSTRIKE_CAPTURE_SIZE` to the stated dimensions, and `HUNGERSTRIKE_CAPTURE_PATH` to a new PNG. The process was stopped after each complete PNG was verified; natural app exit is not claimed. The capture stderr logs had no WARN, ERROR, or panic lines. All five PNGs were visually inspected: the light layout, stocked fridge and selected lot, receipt draft, meal cards, spending budgets, original dormouse tile, and authentic PWDS mark appeared. The header fit at 1280 x 720.
+
+The embedded logo PNGs are the original public assets in source commit `74ca953`: HungerStrike dormouse SHA-256 `6F56D9A1587981D2F6DFAFCAA79ED6480B29C27D091D31CA8D5F9D1778B2393E`, PWDS mark SHA-256 `B4C19554261C06EFCA0EE81879BC9CCCAFBEF7FDE84E92328354324E39670C18`. A future logo asset change requires a new executable and new screenshots. The earlier [dark kitchen capture](SCREENSHOT_PROVENANCE.md) remains preserved as older public-version evidence.
+
+These frames establish startup, synthetic state rendering, the screenshot path, and the visible light interface at the stated sizes. They do not establish native mouse/keyboard operation, scrolled layouts, photo OCR, file dialogs, backup restore, accessibility, real receipt handling, or operation on another device.

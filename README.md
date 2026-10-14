@@ -15,9 +15,9 @@
 
 HungerStrike brings reviewed purchases, local stock, meal ideas, and spending into one Windows desktop workspace. Every receipt stays a draft until you confirm what it says.
 
-![Older public-version HungerStrike kitchen capture with dark controls and a simple 3D fridge](assets/screenshots/hungerstrike-kitchen-current.png)
+![Current light HungerStrike Kitchen with the original dormouse and PWDS logos, stocked fridge, and selected inventory details](assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1600.png)
 
-*Historical public-version capture from source `a55700a`. It does not show the newer light interface on this branch. [Capture details and limits](docs/SCREENSHOT_PROVENANCE.md). See the [receipt review](docs/verification/desktop-receipt-final.png), [meal ideas](docs/verification/desktop-meals-final.png), and [spending view](docs/verification/desktop-spending-final.png), also recaptured from the older public source. A capture of the integrated light interface is pending.*
+*New app-rendered light interface from source `74ca953`, using synthetic stock. [Capture provenance and limits](docs/LIGHT_SCREENSHOT_PROVENANCE.md). See the new [receipt review](assets/screenshots/hungerstrike-receipt-light-74ca953.png), [meal ideas](assets/screenshots/hungerstrike-meals-light-74ca953.png), [spending view](assets/screenshots/hungerstrike-spending-light-74ca953.png), and [1280 x 720 Kitchen](assets/screenshots/hungerstrike-kitchen-light-selected-74ca953-1280.png). The [older dark public-version capture](assets/screenshots/hungerstrike-kitchen-current.png) and its [provenance](docs/SCREENSHOT_PROVENANCE.md) remain available.*
 
 <p align="center"><a href="docs/workflow.md">Walk through the app</a> · <a href="docs/launch.md">Build and launch</a> · <a href="verification.md">Verification and limits</a> · <a href="assets/branding">Original artwork</a></p>
 
@@ -58,7 +58,7 @@ cargo test --workspace
 
 ## Status and data
 
-This is a **Windows alpha source preview**. The newer light interface and its original artwork are [recorded here](docs/verification/LIGHT_UI_SOURCE_RECOVERY.md); this integrated branch has not yet been built or visually captured.
+This is a **Windows alpha source preview**. The newer light interface and its original artwork are [recorded here](docs/verification/LIGHT_UI_SOURCE_RECOVERY.md). The source-matched build passed 62 workspace tests and saved the new synthetic frames above; native interaction remains a separate check.
 
  The [2026-10-10 verification record](verification.md) reports 57 passing workspace tests and inspected application-rendered frames on one Windows 11/NVIDIA setup. Native mouse and keyboard click-through, file dialogs, accessibility, other devices, and broader receipt/photo acceptance remain open. The separate [Android preview source branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has no APK release or physical-device validation.
 
