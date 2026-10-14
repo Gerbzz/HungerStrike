@@ -15,9 +15,9 @@
 
 HungerStrike brings reviewed purchases, local stock, meal ideas, and spending into one Windows desktop workspace. Every receipt stays a draft until you confirm what it says.
 
-![HungerStrike kitchen inventory preview with a 3D fridge, freezer, and pantry beside confirmed stock](docs/verification/desktop-kitchen-final.png)
+![HungerStrike kitchen inventory preview with a 3D fridge, freezer, and pantry beside confirmed stock](assets/screenshots/hungerstrike-kitchen-current.png)
 
-*Earlier Windows preview with synthetic stock. This inspected app-rendered image comes from the October 10 verification run; the public source has since diverged from that capture build. [Image provenance and current capture status](docs/SCREENSHOT_PROVENANCE.md). See the [receipt review](docs/verification/desktop-receipt-final.png), [meal ideas](docs/verification/desktop-meals-final.png), and [spending view](docs/verification/desktop-spending-final.png) from the same run.*
+*Current Windows source rendering synthetic kitchen stock. [Capture details and limits](docs/SCREENSHOT_PROVENANCE.md). See the [receipt review](docs/verification/desktop-receipt-final.png), [meal ideas](docs/verification/desktop-meals-final.png), and [spending view](docs/verification/desktop-spending-final.png), also recaptured from this source.*
 
 <p align="center"><a href="docs/workflow.md">Walk through the app</a> · <a href="docs/launch.md">Build and launch</a> · <a href="verification.md">Verification and limits</a> · <a href="assets/branding">Original artwork</a></p>
 
