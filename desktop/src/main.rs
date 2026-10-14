@@ -71,12 +71,16 @@ struct AppState {
     week_start: u8,
     weekly_budget: i64,
     monthly_budget: i64,
+    weekly_budget_text: String,
+    monthly_budget_text: String,
     backup_bytes: Option<Vec<u8>>,
     backup_preview: Option<ImportPreview>,
     source_match: Option<(String, String)>,
     separate_ack: bool,
     ocr_task: Option<OcrTask>,
     style_ready: bool,
+    dormouse_logo: Option<bevy_egui::egui::TextureHandle>,
+    pwds_logo: Option<bevy_egui::egui::TextureHandle>,
     scene_dirty: bool,
     camera_yaw: f32,
     camera_distance: f32,
@@ -108,27 +112,48 @@ impl AppState {
             week_start: 0,
             weekly_budget,
             monthly_budget,
+            weekly_budget_text: format!("${}.{:02}", weekly_budget / 100, weekly_budget % 100),
+            monthly_budget_text: format!("${}.{:02}", monthly_budget / 100, monthly_budget % 100),
             backup_bytes: None,
             backup_preview: None,
             source_match: None,
             separate_ack: false,
             ocr_task: None,
             style_ready: false,
+            dormouse_logo: None,
+            pwds_logo: None,
             scene_dirty: true,
-            camera_yaw: 0.65,
-            camera_distance: 12.0,
+            camera_yaw: 0.36,
+            camera_distance: 8.8,
         })
     }
 
     fn refresh(&mut self) -> Result<(), String> {
         let store = self.store.lock().map_err(|e| e.to_string())?;
         self.snapshot = snapshot(&store)?;
+        if !self.lot_id.is_empty() {
+            if let Some(lot) = self.snapshot.lots.iter().find(|lot| lot.id == self.lot_id) {
+                self.zone = lot.zone.clone();
+            } else {
+                self.lot_id.clear();
+            }
+        }
         if let Ok(view) = budget_view(&store, &self.reference_date, Period::Week, self.week_start) {
             self.weekly_budget = view.budget_cents.unwrap_or(0);
+            self.weekly_budget_text = format!(
+                "${}.{:02}",
+                self.weekly_budget / 100,
+                self.weekly_budget % 100
+            );
         }
         if let Ok(view) = budget_view(&store, &self.reference_date, Period::Month, self.week_start)
         {
             self.monthly_budget = view.budget_cents.unwrap_or(0);
+            self.monthly_budget_text = format!(
+                "${}.{:02}",
+                self.monthly_budget / 100,
+                self.monthly_budget % 100
+            );
         }
         self.scene_dirty = true;
         Ok(())
@@ -293,6 +318,40 @@ impl AppState {
     }
 }
 
+fn seed_unknown_visual_capture(state: &mut AppState) -> Result<(), String> {
+    state.raw_text = include_str!("../../tests/fixtures/visual-unknown-items.txt").into();
+    state.dispatch(AppAction::ParseReceipt)?;
+    let draft = state.draft.as_mut().ok_or("visual fixture did not parse")?;
+    for item in &mut draft.items {
+        item.category = match item.name.as_str() {
+            "apple juice" => "food.beverage",
+            "fresh tomatoes" => "food.produce",
+            name => return Err(format!("unexpected visual fixture item: {name}")),
+        }
+        .into();
+        // A person has explicitly resolved the category of each unfamiliar
+        // synthetic line before the demo writes inventory.
+        item.uncertainty.retain(|flag| flag != "item unrecognized");
+    }
+    state.dispatch(AppAction::Commit(ReceiptCommit::New))?;
+    let juice_id = state
+        .snapshot
+        .lots
+        .iter()
+        .find(|lot| lot.name == "apple juice")
+        .ok_or("visual fixture juice lot missing")?
+        .id
+        .clone();
+    state.dispatch(AppAction::Inventory(InventoryAction::Move {
+        lot_id: juice_id.clone(),
+        zone: "fridge".into(),
+    }))?;
+    state.dispatch(AppAction::SelectZone("fridge".into()))?;
+    state.dispatch(AppAction::SelectLot(juice_id))?;
+    state.message = "SYNTHETIC TEST DATA - unknown product shapes in isolated local profile".into();
+    Ok(())
+}
+
 fn data_path() -> PathBuf {
     let directory = std::env::var_os("HUNGERSTRIKE_DATA_DIR")
         .or_else(|| std::env::var_os("LOCALAPPDATA"))
@@ -322,7 +381,12 @@ fn main() {
             .dispatch(AppAction::Navigate(Tab::Receipt))
             .expect("show receipt");
         state.message = "SYNTHETIC TEST DATA — review only; no inventory write".into();
-    } else if matches!(demo.as_deref(), Some("kitchen" | "meals" | "spending")) {
+    } else if demo.as_deref() == Some("unknowns") {
+        seed_unknown_visual_capture(&mut state).expect("seed synthetic unknown-item capture");
+    } else if matches!(
+        demo.as_deref(),
+        Some("kitchen" | "pantry" | "freezer" | "all" | "selected" | "meals" | "spending")
+    ) {
         state.raw_text =
             include_str!("../../core/tests/fixtures/receipts/R001-purchase.txt").into();
         state
@@ -364,29 +428,79 @@ fn main() {
             .expect("show synthetic page");
         if tab == Tab::Kitchen {
             state
-                .dispatch(AppAction::SelectZone("fridge".into()))
-                .expect("show synthetic fridge");
+                .dispatch(AppAction::SelectZone(
+                    match demo.as_deref() {
+                        Some("pantry") => "pantry",
+                        Some("freezer") => "freezer",
+                        Some("all") => "all",
+                        _ => "fridge",
+                    }
+                    .into(),
+                ))
+                .expect("show synthetic storage");
+            if demo.as_deref() == Some("selected") {
+                if let Some(lot) = state
+                    .snapshot
+                    .lots
+                    .iter()
+                    .find(|lot| lot.zone == "fridge")
+                    .map(|lot| lot.id.clone())
+                {
+                    state
+                        .dispatch(AppAction::SelectLot(lot))
+                        .expect("show selected synthetic lot");
+                }
+            }
         }
         state.message = "SYNTHETIC TEST DATA — application-rendered verification capture".into();
     }
+    let resolution = std::env::var("HUNGERSTRIKE_CAPTURE_SIZE")
+        .ok()
+        .and_then(|size| {
+            let (width, height) = size.split_once('x')?;
+            Some((width.parse::<u32>().ok()?, height.parse::<u32>().ok()?))
+        })
+        .filter(|(width, height)| (1000..=1920).contains(width) && (700..=1200).contains(height))
+        .unwrap_or((1440, 900));
+    let assets_dir = std::env::var_os("HUNGERSTRIKE_ASSETS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            std::env::current_exe()
+                .expect("locate local executable")
+                .parent()
+                .expect("executable directory")
+                .join("assets")
+        });
     App::new()
         .insert_resource(state)
         .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "HungerStrike · local kitchen".into(),
-                    resolution: (1440, 900).into(),
+            DefaultPlugins
+                .set(AssetPlugin {
+                    file_path: assets_dir.to_string_lossy().into_owned(),
+                    ..default()
+                })
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "HungerStrike · local kitchen".into(),
+                        resolution: resolution.into(),
+                        ..default()
+                    }),
                     ..default()
                 }),
-                ..default()
-            }),
             EguiPlugin::default(),
             MeshPickingPlugin,
         ))
+        .add_observer(scene::lot_clicked)
         .add_systems(Startup, scene::setup)
         .add_systems(
             Update,
-            (scene::camera_controls, scene::sync_visuals, capture_once),
+            (
+                scene::camera_controls,
+                scene::sync_visuals,
+                scene::animate_visuals,
+                capture_once,
+            )
+                .chain(),
         )
         .add_systems(EguiPrimaryContextPass, draw_ui)
         .run();
@@ -415,6 +529,43 @@ mod tests {
     use super::*;
 
     const RECEIPT: &str = include_str!("../../core/tests/fixtures/receipts/R001-purchase.txt");
+
+    #[test]
+    fn unknown_visual_fixture_is_corrected_before_isolated_inventory_seed() {
+        let raw = include_str!("../../tests/fixtures/visual-unknown-items.txt");
+        let draft = parse_text(raw);
+        assert_eq!(
+            draft
+                .items
+                .iter()
+                .map(|item| item.name.as_str())
+                .collect::<Vec<_>>(),
+            ["apple juice", "fresh tomatoes"]
+        );
+        assert!(review(draft).is_err(), "unknown categories need review");
+
+        let mut state =
+            AppState::new(Store::open_in_memory().unwrap(), "2026-10-04".into()).unwrap();
+        seed_unknown_visual_capture(&mut state).unwrap();
+        assert_eq!(state.snapshot.receipt_count, 1);
+        assert_eq!(state.snapshot.cash_flow_cents, 728);
+        assert_eq!(state.zone, "fridge");
+        assert_eq!(state.snapshot.lots.len(), 2);
+        assert!(state
+            .snapshot
+            .lots
+            .iter()
+            .all(|lot| lot.zone == "fridge" && lot.expiry_date.is_none()));
+        assert_eq!(
+            state
+                .snapshot
+                .lots
+                .iter()
+                .find(|lot| lot.id == state.lot_id)
+                .map(|lot| lot.name.as_str()),
+            Some("apple juice")
+        );
+    }
 
     #[test]
     fn cancel_clears_temporary_ocr_and_review_state() {
@@ -482,10 +633,8 @@ mod tests {
                 zone: "pantry".into(),
             }))
             .unwrap();
-        state
-            .dispatch(AppAction::SelectLot(banana.clone()))
-            .unwrap();
         assert_eq!(state.zone, "pantry");
+        assert_eq!(state.lot_id, banana);
         assert_eq!(
             state
                 .snapshot

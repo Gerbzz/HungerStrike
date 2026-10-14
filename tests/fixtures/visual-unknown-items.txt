@@ -1,0 +1,11 @@
+SYNTHETIC TEST DATA - NOT A REAL TRANSACTION
+VISUAL UNKNOWN-ITEM RECEIPT (FICTIONAL TEXT FIXTURE)
+FIXTURE ID VIS-U001 DATE 2026-10-04
+All prices and tax are invented fixture values, not current store prices or tax guidance.
+
+APPLE JUICE       1 GAL                   4.29
+FRESH TOMATOES    1 LB                    2.99
+SUBTOTAL                                  7.28
+TAX                                       0.00
+TOTAL                                     7.28
+END SYNTHETIC TEST DATA

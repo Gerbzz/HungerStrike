@@ -15,9 +15,9 @@
 
 HungerStrike brings reviewed purchases, local stock, meal ideas, and spending into one Windows desktop workspace. Every receipt stays a draft until you confirm what it says.
 
-![HungerStrike kitchen inventory preview with a 3D fridge, freezer, and pantry beside confirmed stock](assets/screenshots/hungerstrike-kitchen-current.png)
+![Older public-version HungerStrike kitchen capture with dark controls and a simple 3D fridge](assets/screenshots/hungerstrike-kitchen-current.png)
 
-*Current Windows source rendering synthetic kitchen stock. [Capture details and limits](docs/SCREENSHOT_PROVENANCE.md). See the [receipt review](docs/verification/desktop-receipt-final.png), [meal ideas](docs/verification/desktop-meals-final.png), and [spending view](docs/verification/desktop-spending-final.png), also recaptured from this source.*
+*Historical public-version capture from source `a55700a`. It does not show the newer light interface on this branch. [Capture details and limits](docs/SCREENSHOT_PROVENANCE.md). See the [receipt review](docs/verification/desktop-receipt-final.png), [meal ideas](docs/verification/desktop-meals-final.png), and [spending view](docs/verification/desktop-spending-final.png), also recaptured from the older public source. A capture of the integrated light interface is pending.*
 
 <p align="center"><a href="docs/workflow.md">Walk through the app</a> · <a href="docs/launch.md">Build and launch</a> · <a href="verification.md">Verification and limits</a> · <a href="assets/branding">Original artwork</a></p>
 
@@ -58,7 +58,9 @@ cargo test --workspace
 
 ## Status and data
 
-This is a **Windows alpha source preview**. The [2026-10-10 verification record](verification.md) reports 57 passing workspace tests and inspected application-rendered frames on one Windows 11/NVIDIA setup. Native mouse and keyboard click-through, file dialogs, accessibility, other devices, and broader receipt/photo acceptance remain open. The separate [Android preview source branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has no APK release or physical-device validation.
+This is a **Windows alpha source preview**. The newer light interface and its original artwork are [recorded here](docs/verification/LIGHT_UI_SOURCE_RECOVERY.md); this integrated branch has not yet been built or visually captured.
+
+ The [2026-10-10 verification record](verification.md) reports 57 passing workspace tests and inspected application-rendered frames on one Windows 11/NVIDIA setup. Native mouse and keyboard click-through, file dialogs, accessibility, other devices, and broader receipt/photo acceptance remain open. The separate [Android preview source branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has no APK release or physical-device validation.
 
 Confirmed inventory lives in local SQLite at `%LOCALAPPDATA%\HungerStrike\inventory.sqlite`. The **Data** tab can export a JSON backup and preview an import. The app has no account, cloud sync, telemetry, paid API, or runtime network call in this source checkpoint. Raw receipt lines, photo bytes, and OCR transcripts are not stored in SQLite or backups; reviewed fields and sanitized audit metadata are. [Workflow details](docs/workflow.md) explain confirmation, refunds, corrections, and backup choices.
 
