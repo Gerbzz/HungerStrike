@@ -1409,8 +1409,13 @@ fn meal_details(ui: &mut egui::Ui, state: &mut AppState) {
             egui::Color32::from_rgb(160, 96, 30),
             format!("Use soon: {}", meal.soon_expiring.join(", ")),
         );
-        ui.label("Check dates and food condition before cooking.");
     }
+    if meal.expiry_unknown {
+        ui.label("Some selected stock has no recorded expiry date.");
+    }
+    ui.label(
+        "Dates are planning cues, not a food safety check. Check food condition before cooking.",
+    );
     ui.separator();
     ui.strong("Ingredients");
     for ingredient in &meal.ingredients {

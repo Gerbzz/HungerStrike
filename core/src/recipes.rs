@@ -132,10 +132,12 @@ pub fn suggest_meals(
             })
             .collect();
         stock.sort_by_key(|entry| {
-            (
-                entry.lot.expiry_date.is_none(),
-                entry.lot.expiry_date.clone(),
-            )
+            let expiry = entry
+                .lot
+                .expiry_date
+                .as_deref()
+                .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok());
+            (expiry.is_none(), expiry)
         });
         let mut estimates = Vec::new();
         let mut consumption = Vec::new();
@@ -249,10 +251,13 @@ pub fn suggest_meals(
         let soonest_expiry = meal
             .consumption
             .iter()
-            .filter_map(|lot| lot.expiry_date.as_deref())
+            .filter_map(|lot| {
+                lot.expiry_date
+                    .as_deref()
+                    .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+            })
             .min()
-            .unwrap_or("9999-12-31")
-            .to_string();
+            .unwrap_or(NaiveDate::MAX);
         (
             !meal.available,
             if meal.available {
@@ -264,7 +269,7 @@ pub fn suggest_meals(
             if meal.available {
                 soonest_expiry
             } else {
-                String::new()
+                NaiveDate::MAX
             },
             meal.name.clone(),
         )

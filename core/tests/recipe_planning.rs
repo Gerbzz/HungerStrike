@@ -237,3 +237,59 @@ fn explicit_cook_consumes_all_previewed_lots_once() {
     );
     assert!(after.consumed_cost_cents > 0);
 }
+
+#[test]
+fn user_entered_unpadded_dates_use_chronological_lot_order() {
+    let mut draft = parse_text(RECEIPT);
+    draft
+        .items
+        .iter_mut()
+        .find(|item| item.name == "spinach")
+        .unwrap()
+        .expiry_date = Some("2026-2-10".into());
+    let mut store = Store::open_in_memory().unwrap();
+    confirm_receipt(&mut store, review(draft).unwrap()).unwrap();
+
+    let mut state = snapshot(&store).unwrap();
+    let earlier = state
+        .lots
+        .iter_mut()
+        .find(|lot| lot.name == "spinach")
+        .unwrap();
+    earlier.quantity = "1".into();
+    let mut later = earlier.clone();
+    later.id = "later-spinach".into();
+    later.expiry_date = Some("2026-10-05".into());
+    state.lots.push(later);
+
+    let suggestion = suggest_meals(&state, &[recipe("spinach", "1", "oz")], "2026-02-01")
+        .unwrap()
+        .remove(0);
+    assert_eq!(suggestion.consumption[0].lot_id, "R001-L05");
+}
+
+#[test]
+fn user_entered_unpadded_date_ranks_earlier_meal_first() {
+    let mut state = snapshot(&seeded()).unwrap();
+    state
+        .lots
+        .iter_mut()
+        .find(|lot| lot.name == "spinach")
+        .unwrap()
+        .expiry_date = Some("2026-2-10".into());
+    state
+        .lots
+        .iter_mut()
+        .find(|lot| lot.name == "pasta")
+        .unwrap()
+        .expiry_date = Some("2026-10-05".into());
+    let mut early = recipe("spinach", "1", "oz");
+    early.id = "early".into();
+    early.name = "Z early".into();
+    let mut late = recipe("pasta", "1", "each");
+    late.id = "late".into();
+    late.name = "A late".into();
+
+    let suggestions = suggest_meals(&state, &[late, early], "2026-02-01").unwrap();
+    assert_eq!(suggestions[0].id, "early");
+}
