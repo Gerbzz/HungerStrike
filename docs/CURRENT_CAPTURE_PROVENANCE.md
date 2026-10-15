@@ -2,7 +2,18 @@
 
 These are unedited PNGs written by HungerStrike's built-in Bevy screenshot path. Each run used a separate synthetic local SQLite profile. The visible **SYNTHETIC TEST DATA** is not a personal receipt or inventory. The older light and dark captures remain in the repository with separate provenance.
 
-## Latest source checkpoint, October 15, 2026 UTC
+## About layer correction, October 15, 2026 UTC
+
+Source `2c122bf9d81ae4bb38d236e6f6c8cf50579b93cb` moves the About window's draw call after the Kitchen panels and floating storage caption. The earlier `34405b7` About frame remains below as evidence of the title-bar overlap. No other app source changed. A guarded, offline, locked, single-job workspace run passed **71 tests** (53 core and 18 desktop). The guarded offline release executable SHA-256 is `D4A9B120A5B3AEC477F54C59F6B2B11F055C21F034664B96B7AF169F69622042`.
+
+| App-rendered state | PNG SHA-256 |
+| --- | --- |
+| [About, 1600 x 900](../assets/screenshots/hungerstrike-about-light-2c122bf-1600x900.png) | `59EEA0213425B9A145C49040F6A627DDD20CBA4743E6E953220B292A4B08B2C4` |
+| [About, 1280 x 720](../assets/screenshots/hungerstrike-about-light-2c122bf-1280x720.png) | `D966FF8DD51C25A8DD07093A0ACD1BF1EC183B9787B169015FA6D62646092434` |
+
+Both captures used a fresh isolated synthetic `HUNGERSTRIKE_DATA_DIR`, this branch's assets, the `about` capture state, the stated `HUNGERSTRIKE_CAPTURE_SIZE`, and a new PNG path. The app wrote both files through Bevy's screenshot path; the helper checked complete PNG headers and trailers before stopping its own process. Both images were visually inspected: the full About title and X close control are unobstructed, including at 1280 x 720, and the original dormouse and PWDS attribution are present. Their separate stderr logs contain no WARN, ERROR, or panic lines. Native clicking of the close control is not established by these captures. The earlier executable and symbols remain saved outside the repository.
+
+## Previous source checkpoint, October 15, 2026 UTC
 
 Source `34405b73a86724fc45b34a6ea1a843b6eb930ed2` built offline, locked, and single-job using the existing Cargo cache. The release executable SHA-256 is `019585400684DF120218F1C1051DCCF31291FCE273CDF0BDDE4AE5E7CD0DD5C2`. It includes the shared effective Meals selection fix at `59803ea`, for which a regression first failed on the default recipe and then passed. The full workspace run passed **71 tests** (53 core integration tests and 18 desktop tests). `cargo fmt --all --check` and `git diff --check` passed.
 
