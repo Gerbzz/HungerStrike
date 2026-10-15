@@ -1,5 +1,7 @@
 # HungerStrike Windows preview verification · 2026-10-10
 
+This is a dated verification record for the earlier default-branch interface. The README now shows separately sourced [light Kitchen and Meals development previews](docs/LIGHT_PREVIEW_PROVENANCE.md) from a tested draft PR. The screenshots linked below remain historical evidence of the earlier build.
+
 ## Verified locally on Neil's Windows PC
 
 | Check | Result |

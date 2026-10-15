@@ -15,9 +15,13 @@
 
 HungerStrike brings reviewed purchases, local stock, meal ideas, and spending into one Windows desktop workspace. Every receipt stays a draft until you confirm what it says.
 
-![HungerStrike kitchen inventory preview with a 3D fridge, freezer, and pantry beside confirmed stock](assets/screenshots/hungerstrike-kitchen-current.png)
+## Light interface development preview
 
-*Current Windows source rendering synthetic kitchen stock. [Capture details and limits](docs/SCREENSHOT_PROVENANCE.md). See the [receipt review](docs/verification/desktop-receipt-final.png), [meal ideas](docs/verification/desktop-meals-final.png), and [spending view](docs/verification/desktop-spending-final.png), also recaptured from this source.*
+<p align="center"><img src="assets/screenshots/hungerstrike-kitchen-light-34405b7-1600x1100.png" alt="HungerStrike light Kitchen development preview with synthetic confirmed stock" width="900"></p>
+
+<p align="center"><img src="assets/screenshots/hungerstrike-meals-light-34405b7-1600x900.png" alt="HungerStrike light Cook now Meals development preview with synthetic stock" width="900"></p>
+
+*These unedited app-rendered frames show synthetic data from tested [draft light-interface PR #1](https://github.com/Gerbzz/HungerStrike/pull/1), source `34405b7`. They are development previews, not captures of an executable built from this default branch. See [image hashes, capture method, and limits](docs/LIGHT_PREVIEW_PROVENANCE.md). The older dark image remains [archived with its provenance](docs/SCREENSHOT_PROVENANCE.md).*
 
 <p align="center"><a href="docs/workflow.md">Walk through the app</a> · <a href="docs/launch.md">Build and launch</a> · <a href="verification.md">Verification and limits</a> · <a href="assets/branding">Original artwork</a></p>
 
@@ -33,13 +37,15 @@ Browse the fridge, freezer, and pantry in the 3D scene or the matching stock lis
 
 ### Plan meals from confirmed stock
 
-Meal suggestions use the quantities on hand. Ingredient availability, use-soon cues, and estimated remaining-lot costs are shown together; an unknown cost is not filled in with a guess.
+The draft light-interface preview includes six original bundled recipes. Cook now uses sufficient confirmed stock, Use soon highlights user-entered dates as planning cues, and Plan next shows missing quantities that can be saved to a local shopping list. Cook requires an explicit action to update stock. Missing grocery prices and unknown stock costs stay unknown. These draft features are not yet in the default-branch app source.
 
 ### Keep spending and stock use distinct
 
 The spending view separates receipt cash flow, food and household allocations, refunds, consumed food, and discarded food. Weekly and monthly budgets use those reviewed figures without counting stock use as another purchase.
 
 ## Run the Windows source preview
+
+The commands below build the default-branch source. The light development preview above is on [draft PR #1](https://github.com/Gerbzz/HungerStrike/pull/1).
 
 You need a local Rust toolchain and Cargo. From the repository root:
 
@@ -58,7 +64,7 @@ cargo test --workspace
 
 ## Status and data
 
-This is a **Windows alpha source preview**. The [2026-10-10 verification record](verification.md) reports 57 passing workspace tests and inspected application-rendered frames on one Windows 11/NVIDIA setup. Native mouse and keyboard click-through, file dialogs, accessibility, other devices, and broader receipt/photo acceptance remain open. The separate [Android preview source branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has no APK release or physical-device validation.
+This default branch is a **Windows alpha source preview**. The [2026-10-10 verification record](verification.md) reports 57 passing workspace tests for its earlier source. The separate [draft light-interface PR #1](https://github.com/Gerbzz/HungerStrike/pull/1) passed 73 offline workspace tests (55 core and 18 desktop); its light Kitchen and Meals images above were captured at the earlier tested draft source `34405b7`. Native mouse and keyboard click-through, file dialogs, accessibility, other devices, and broader receipt/photo acceptance remain open. The separate [Android preview source branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has no APK release or physical-device validation.
 
 Confirmed inventory lives in local SQLite at `%LOCALAPPDATA%\HungerStrike\inventory.sqlite`. The **Data** tab can export a JSON backup and preview an import. The app has no account, cloud sync, telemetry, paid API, or runtime network call in this source checkpoint. Raw receipt lines, photo bytes, and OCR transcripts are not stored in SQLite or backups; reviewed fields and sanitized audit metadata are. [Workflow details](docs/workflow.md) explain confirmation, refunds, corrections, and backup choices.
 
