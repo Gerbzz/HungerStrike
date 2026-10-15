@@ -339,9 +339,6 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                 );
             });
         });
-    if state.show_about {
-        about_window(ctx, state);
-    }
     if state.tab == Tab::Kitchen {
         egui::SidePanel::left("storage_rail")
             .resizable(false)
@@ -549,6 +546,9 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                         }
                     });
             });
+    }
+    if state.show_about {
+        about_window(ctx, state);
     }
 }
 
