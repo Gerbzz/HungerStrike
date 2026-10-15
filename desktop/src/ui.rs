@@ -1241,6 +1241,12 @@ fn meals(ui: &mut egui::Ui, state: &mut AppState) {
         .iter()
         .filter(|meal| in_meal_filter(meal, state.meal_filter))
         .collect();
+    let selected_id = effective_selected_meal(
+        &suggestions,
+        state.meal_filter,
+        state.selected_recipe_id.as_deref(),
+    )
+    .map(|meal| meal.id.as_str());
     if visible.is_empty() {
         ui.label(match state.meal_filter {
             MealFilter::CookNow => "No complete recipe from current usable stock. Try Plan next.",
@@ -1251,7 +1257,7 @@ fn meals(ui: &mut egui::Ui, state: &mut AppState) {
         });
     }
     for meal in visible {
-        meal_card(ui, meal, state);
+        meal_card(ui, meal, selected_id == Some(meal.id.as_str()), state);
     }
     if state.meal_filter == MealFilter::PlanNext {
         ui.add_space(10.0);
@@ -1296,7 +1302,21 @@ fn in_meal_filter(meal: &MealSuggestion, filter: MealFilter) -> bool {
     }
 }
 
-fn meal_card(ui: &mut egui::Ui, meal: &MealSuggestion, state: &mut AppState) {
+fn effective_selected_meal<'a>(
+    suggestions: &'a [MealSuggestion],
+    filter: MealFilter,
+    selected_id: Option<&str>,
+) -> Option<&'a MealSuggestion> {
+    selected_id
+        .and_then(|id| {
+            suggestions
+                .iter()
+                .find(|meal| meal.id == id && in_meal_filter(meal, filter))
+        })
+        .or_else(|| suggestions.iter().find(|meal| in_meal_filter(meal, filter)))
+}
+
+fn meal_card(ui: &mut egui::Ui, meal: &MealSuggestion, selected: bool, state: &mut AppState) {
     let have = meal
         .ingredients
         .iter()
@@ -1306,7 +1326,6 @@ fn meal_card(ui: &mut egui::Ui, meal: &MealSuggestion, state: &mut AppState) {
         .estimate_cents
         .map(money)
         .unwrap_or_else(|| "unknown".into());
-    let selected = state.selected_recipe_id.as_deref() == Some(meal.id.as_str());
     egui::Frame::group(ui.style())
         .fill(if selected {
             egui::Color32::from_rgb(231, 243, 239)
@@ -1354,19 +1373,11 @@ fn meal_details(ui: &mut egui::Ui, state: &mut AppState) {
             return;
         }
     };
-    let selected = state
-        .selected_recipe_id
-        .as_deref()
-        .and_then(|id| {
-            suggestions
-                .iter()
-                .find(|meal| meal.id == id && in_meal_filter(meal, state.meal_filter))
-        })
-        .or_else(|| {
-            suggestions
-                .iter()
-                .find(|meal| in_meal_filter(meal, state.meal_filter))
-        });
+    let selected = effective_selected_meal(
+        &suggestions,
+        state.meal_filter,
+        state.selected_recipe_id.as_deref(),
+    );
     let Some(meal) = selected else {
         ui.label("Choose a recipe from the list.");
         return;
@@ -1855,7 +1866,43 @@ fn data(ui: &mut egui::Ui, state: &mut AppState) {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_budget_dollars;
+    use super::{effective_selected_meal, parse_budget_dollars, MealFilter, MealSuggestion};
+
+    #[test]
+    fn default_and_explicit_meal_selection_use_visible_recipe() {
+        let meal = |id: &str, available| MealSuggestion {
+            id: id.into(),
+            name: id.into(),
+            servings: 1,
+            steps: vec![],
+            available,
+            estimate_cents: None,
+            estimate_status: String::new(),
+            ingredients: vec![],
+            consumption: vec![],
+            soon_expiring: vec![],
+            expiry_unknown: true,
+        };
+        let suggestions = [
+            meal("egg-and-spinach", true),
+            meal("spinach-pasta", true),
+            meal("tomato-pasta", false),
+        ];
+        let selected = |filter, id| {
+            effective_selected_meal(&suggestions, filter, id).map(|meal| meal.id.as_str())
+        };
+
+        assert_eq!(selected(MealFilter::CookNow, None), Some("egg-and-spinach"));
+        assert_eq!(
+            selected(MealFilter::CookNow, Some("spinach-pasta")),
+            Some("spinach-pasta")
+        );
+        assert_eq!(
+            selected(MealFilter::CookNow, Some("tomato-pasta")),
+            Some("egg-and-spinach")
+        );
+        assert_eq!(selected(MealFilter::PlanNext, None), Some("tomato-pasta"));
+    }
 
     #[test]
     fn budget_dollar_input_converts_to_exact_integer_cents() {
