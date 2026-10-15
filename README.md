@@ -15,9 +15,9 @@
 
 HungerStrike brings reviewed purchases, local stock, meal ideas, and spending into one Windows desktop workspace. Every receipt stays a draft until you confirm what it says.
 
-<p align="center"><img src="assets/screenshots/hungerstrike-kitchen-light-f9aa030-1600x1100.png" alt="Current light HungerStrike Kitchen with synthetic stock and selected-item actions" width="900"></p>
+<p align="center"><img src="assets/screenshots/hungerstrike-kitchen-light-f9aa030-1600x1100.png" alt="Light HungerStrike Kitchen at source f9aa030 with synthetic stock and selected-item actions" width="900"></p>
 
-The latest [light Kitchen capture](assets/screenshots/hungerstrike-kitchen-light-f9aa030-1600x1100.png) shows the corrected stock rail, selected-item actions, and approved dormouse branding. [Cook now](assets/screenshots/hungerstrike-meals-light-2d5d5ab-1600x900.png) and [Plan next](assets/screenshots/hungerstrike-plan-next-light-2d5d5ab-1600x900.png) were captured from the preceding recipe source; the subsequent `f9aa030` change only corrected Kitchen sizing. See the [exact capture provenance and remaining checks](docs/CURRENT_CAPTURE_PROVENANCE.md). Earlier [light frames](docs/LIGHT_SCREENSHOT_PROVENANCE.md) and the [dark public-version image](docs/SCREENSHOT_PROVENANCE.md) remain preserved as historical evidence.
+The [light Kitchen capture](assets/screenshots/hungerstrike-kitchen-light-f9aa030-1600x1100.png), [1280 × 720 Kitchen](assets/screenshots/hungerstrike-kitchen-light-f9aa030-1280x720.png), [Cook now](assets/screenshots/hungerstrike-meals-light-f9aa030-1600x900.png), and [Plan next](assets/screenshots/hungerstrike-plan-next-light-f9aa030-1600x900.png) are genuine frames from the same `f9aa030` executable. See the [exact capture provenance and remaining checks](docs/CURRENT_CAPTURE_PROVENANCE.md). Earlier [light frames](docs/LIGHT_SCREENSHOT_PROVENANCE.md) and the [dark public-version image](docs/SCREENSHOT_PROVENANCE.md) remain preserved as historical evidence.
 
 <p align="center"><a href="docs/workflow.md">Walk through the app</a> · <a href="docs/launch.md">Build and launch</a> · <a href="verification.md">Verification and limits</a> · <a href="assets/branding">Original artwork</a></p>
 
