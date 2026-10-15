@@ -278,6 +278,10 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
         launch_screen(ctx, state);
         return;
     }
+    if state.hold_launch_for_capture {
+        launch_screen(ctx, state);
+        return;
+    }
     if !state.startup_complete {
         if state.scene_dirty {
             launch_screen(ctx, state);

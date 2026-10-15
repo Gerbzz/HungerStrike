@@ -10,7 +10,8 @@ use hungerstrike_core::{
     confirm_separate_purchase, cook_recipe, correct_receipt, export_backup,
     matching_source_receipt, parse_text, preview_import, record_inventory_action,
     remove_shopping_item, restore_last_import, review, set_budget, snapshot, AppSnapshot,
-    ImportPreview, InventoryAction, Period, ReceiptDraft, Recipe, ReplaceOrReconcile, Store,
+    ImportPreview, InventoryAction, Period, ReceiptDraft, Recipe, RecipeCollection,
+    ReplaceOrReconcile, Store,
 };
 use std::{
     path::PathBuf,
@@ -94,6 +95,7 @@ struct AppState {
     show_about: bool,
     meal_filter: MealFilter,
     selected_recipe_id: Option<String>,
+    hold_launch_for_capture: bool,
     dormouse_logo: Option<bevy_egui::egui::TextureHandle>,
     pwds_logo: Option<bevy_egui::egui::TextureHandle>,
     scene_dirty: bool,
@@ -139,6 +141,7 @@ impl AppState {
             show_about: false,
             meal_filter: MealFilter::CookNow,
             selected_recipe_id: None,
+            hold_launch_for_capture: false,
             dormouse_logo: None,
             pwds_logo: None,
             scene_dirty: true,
@@ -417,6 +420,7 @@ fn main() {
         chrono::Local::now().date_naive().to_string()
     };
     let mut state = AppState::new(store, today).expect("read local inventory");
+    state.hold_launch_for_capture = demo.as_deref() == Some("launch");
     if demo.as_deref() == Some("receipt") {
         state.raw_text =
             include_str!("../../core/tests/fixtures/receipts/R001-purchase.txt").into();
@@ -441,6 +445,8 @@ fn main() {
                 | "spending"
                 | "about"
                 | "plan-next"
+                | "plan-added"
+                | "cooked"
         )
     ) {
         state.raw_text =
@@ -474,8 +480,30 @@ fn main() {
             set_budget(&mut store, Period::Month, Some(12000)).expect("synthetic monthly budget");
         }
         state.refresh().expect("refresh synthetic state");
+        if matches!(demo.as_deref(), Some("plan-added" | "cooked")) {
+            let collection: RecipeCollection =
+                serde_json::from_str(include_str!("../../assets/recipes.json"))
+                    .expect("read bundled synthetic recipe");
+            let id = if demo.as_deref() == Some("plan-added") {
+                "tomato-pasta"
+            } else {
+                "egg-spinach-scramble"
+            };
+            let recipe = collection
+                .recipes
+                .into_iter()
+                .find(|recipe| recipe.id == id)
+                .expect("find bundled synthetic recipe");
+            state
+                .dispatch(if demo.as_deref() == Some("plan-added") {
+                    AppAction::AddMissingToShopping(recipe)
+                } else {
+                    AppAction::CookRecipe(recipe)
+                })
+                .expect("apply synthetic recipe action");
+        }
         let tab = match demo.as_deref() {
-            Some("meals" | "plan-next") => Tab::Meals,
+            Some("meals" | "plan-next" | "plan-added") => Tab::Meals,
             Some("spending") => Tab::Spending,
             _ => Tab::Kitchen,
         };
@@ -494,12 +522,15 @@ fn main() {
                     .into(),
                 ))
                 .expect("show synthetic storage");
-            if demo.as_deref() == Some("selected") {
+            if matches!(demo.as_deref(), Some("selected" | "cooked")) {
                 if let Some(lot) = state
                     .snapshot
                     .lots
                     .iter()
-                    .find(|lot| lot.zone == "fridge")
+                    .find(|lot| {
+                        lot.zone == "fridge"
+                            && (demo.as_deref() != Some("cooked") || lot.name == "large eggs")
+                    })
                     .map(|lot| lot.id.clone())
                 {
                     state
@@ -510,7 +541,7 @@ fn main() {
         }
         state.message = "SYNTHETIC TEST DATA — application-rendered verification capture".into();
         state.show_about = demo.as_deref() == Some("about");
-        if demo.as_deref() == Some("plan-next") {
+        if matches!(demo.as_deref(), Some("plan-next" | "plan-added")) {
             state.meal_filter = MealFilter::PlanNext;
             state.selected_recipe_id = Some("tomato-pasta".into());
         }
