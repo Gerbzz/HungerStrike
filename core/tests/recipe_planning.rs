@@ -28,6 +28,20 @@ fn seeded() -> Store {
     store
 }
 
+fn shopping_recipe(id: &str, name: &str, quantity: &str, unit: &str) -> Recipe {
+    Recipe {
+        id: id.into(),
+        name: id.into(),
+        servings: 1,
+        ingredients: vec![RecipeIngredient {
+            name: name.into(),
+            quantity: quantity.into(),
+            unit: unit.into(),
+        }],
+        steps: vec!["Prepare the ingredient.".into()],
+    }
+}
+
 #[test]
 fn recipe_matches_confirmed_food_across_freezer_and_pantry() {
     let mut store = seeded();
@@ -363,6 +377,80 @@ fn selected_meals_convert_compatible_units_before_subtracting_stock() {
     assert_eq!(shopping[0].name, "bananas");
     assert_eq!(shopping[0].quantity, "0.25");
     assert_eq!(shopping[0].unit, "lb");
+
+    let mut reversed_store = seeded();
+    let reversed: Vec<_> = recipes.iter().rev().cloned().collect();
+    let reversed_shopping =
+        add_recipes_missing_to_shopping(&mut reversed_store, &reversed, "2026-10-04").unwrap();
+    assert_eq!(reversed_shopping.len(), 1);
+    assert_eq!(reversed_shopping[0].quantity, "4");
+    assert_eq!(reversed_shopping[0].unit, "oz");
+    let repeated =
+        add_recipes_missing_to_shopping(&mut reversed_store, &recipes, "2026-10-04").unwrap();
+    assert_eq!(repeated, reversed_shopping);
+}
+
+#[test]
+fn combined_shortage_excludes_expired_stock_but_uses_undated_stock() {
+    let mut receipt = parse_text(RECEIPT);
+    receipt
+        .items
+        .iter_mut()
+        .find(|item| item.name == "spinach")
+        .unwrap()
+        .expiry_date = Some("2026-10-03".into());
+    let mut store = Store::open_in_memory().unwrap();
+    confirm_receipt(&mut store, review(receipt).unwrap()).unwrap();
+    let stock = snapshot(&store).unwrap();
+    assert!(stock
+        .lots
+        .iter()
+        .any(|lot| lot.name == "banana" && lot.expiry_date.is_none()));
+    let meals = [
+        shopping_recipe("spinach", "spinach", "1", "oz"),
+        shopping_recipe("banana", "banana", "0.25", "lb"),
+    ];
+    let shopping = add_recipes_missing_to_shopping(&mut store, &meals, "2026-10-04").unwrap();
+    assert_eq!(shopping.len(), 1);
+    assert_eq!(shopping[0].name, "spinach");
+    assert_eq!(shopping[0].quantity, "1");
+    assert_eq!(shopping[0].unit, "oz");
+}
+
+#[test]
+fn combined_shortage_updates_smaller_saved_quantity_and_keeps_larger_one() {
+    let mut store = seeded();
+    let first = shopping_recipe("first", "rice", "0.25", "lb");
+    let second = shopping_recipe("second", "rice", "0.25", "lb");
+    let initial = add_recipe_missing_to_shopping(&mut store, &first, "2026-10-04").unwrap();
+    assert_eq!(initial[0].quantity, "0.25");
+    let combined =
+        add_recipes_missing_to_shopping(&mut store, &[first.clone(), second], "2026-10-04")
+            .unwrap();
+    assert_eq!(combined.len(), 1);
+    assert_eq!(combined[0].quantity, "0.5");
+    let smaller = add_recipe_missing_to_shopping(&mut store, &first, "2026-10-04").unwrap();
+    assert_eq!(smaller, combined);
+}
+
+#[test]
+fn invalid_combined_plan_leaves_persisted_shopping_unchanged() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("stock.sqlite");
+    let mut store = Store::open(&path).unwrap();
+    confirm_receipt(&mut store, review(parse_text(RECEIPT)).unwrap()).unwrap();
+    let valid = shopping_recipe("valid", "rice", "0.25", "lb");
+    add_recipe_missing_to_shopping(&mut store, &valid, "2026-10-04").unwrap();
+    let before = export_backup(&store).unwrap().to_bytes().unwrap();
+    let invalid = shopping_recipe("invalid", "rice", "0", "lb");
+    assert!(add_recipes_missing_to_shopping(&mut store, &[valid, invalid], "2026-10-04").is_err());
+    assert!(add_recipes_missing_to_shopping(&mut store, &[], "2026-10-04").is_err());
+    drop(store);
+    let reopened = Store::open(&path).unwrap();
+    assert_eq!(
+        export_backup(&reopened).unwrap().to_bytes().unwrap(),
+        before
+    );
 }
 
 #[test]

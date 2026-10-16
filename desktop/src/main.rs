@@ -287,17 +287,25 @@ impl AppState {
                 );
             }
             AppAction::AddMissingBatch(recipes) => {
-                {
+                let before = self.snapshot.shopping.clone();
+                let shopping = {
                     let mut store = self.store.lock().map_err(|e| e.to_string())?;
-                    add_recipes_missing_to_shopping(&mut store, &recipes, &self.reference_date)?;
-                }
+                    add_recipes_missing_to_shopping(&mut store, &recipes, &self.reference_date)?
+                };
                 self.refresh()?;
                 self.meal_filter = MealFilter::PlanNext;
                 self.selected_recipe_id = None;
-                self.message = format!(
-                    "Combined grocery needs for {} selected meals saved to your local shopping list.",
-                    recipes.len()
-                );
+                self.message = if shopping == before {
+                    format!(
+                        "No additional groceries needed for {} selected meals. Current stock or saved shopping quantities cover this plan; larger saved quantities are retained.",
+                        recipes.len()
+                    )
+                } else {
+                    format!(
+                        "Combined grocery needs for {} selected meals saved. Larger existing shopping quantities were retained.",
+                        recipes.len()
+                    )
+                };
             }
             AppAction::RemoveShopping { name, unit } => {
                 {
@@ -979,5 +987,54 @@ mod tests {
         assert!(cancelled.ocr_task.is_none());
         assert!(cancelled.draft.is_none());
         assert_eq!(cancelled.snapshot.receipt_count, 0);
+    }
+
+    #[test]
+    fn batch_feedback_distinguishes_stock_covered_and_retained_quantities() {
+        let mut store = Store::open_in_memory().unwrap();
+        confirm_receipt(&mut store, review(parse_text(RECEIPT)).unwrap()).unwrap();
+        let mut state = AppState::new(store, "2026-10-04".into()).unwrap();
+        let banana_meal = |id: &str, quantity: &str| Recipe {
+            id: id.into(),
+            name: id.into(),
+            servings: 1,
+            ingredients: vec![hungerstrike_core::RecipeIngredient {
+                name: "banana".into(),
+                quantity: quantity.into(),
+                unit: "lb".into(),
+            }],
+            steps: vec!["Slice the banana.".into()],
+        };
+
+        state
+            .dispatch(AppAction::AddMissingBatch(vec![banana_meal(
+                "covered", "0.25",
+            )]))
+            .unwrap();
+        assert!(state.snapshot.shopping.is_empty());
+        assert!(state.message.starts_with("No additional groceries needed"));
+        assert_eq!(state.meal_filter, MealFilter::PlanNext);
+
+        state
+            .dispatch(AppAction::AddMissingBatch(vec![banana_meal(
+                "larger", "1.5",
+            )]))
+            .unwrap();
+        assert_eq!(state.snapshot.shopping[0].quantity, "0.25");
+        assert!(state.message.contains("saved"));
+        assert!(state
+            .message
+            .contains("Larger existing shopping quantities"));
+
+        state
+            .dispatch(AppAction::AddMissingBatch(vec![banana_meal(
+                "smaller", "1.4",
+            )]))
+            .unwrap();
+        assert_eq!(state.snapshot.shopping[0].quantity, "0.25");
+        assert!(state.message.starts_with("No additional groceries needed"));
+        assert!(state
+            .message
+            .contains("larger saved quantities are retained"));
     }
 }
