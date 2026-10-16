@@ -1013,7 +1013,7 @@ mod tests {
             .unwrap();
         assert!(state.snapshot.shopping.is_empty());
         assert!(state.message.starts_with("No additional groceries needed"));
-        assert_eq!(state.meal_filter, MealFilter::PlanNext);
+        assert!(state.meal_filter == MealFilter::PlanNext);
 
         state
             .dispatch(AppAction::AddMissingBatch(vec![banana_meal(
