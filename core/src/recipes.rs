@@ -1,4 +1,5 @@
 use chrono::{Duration, NaiveDate};
+use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -48,6 +49,8 @@ pub struct MealSuggestion {
     pub servings: u32,
     pub steps: Vec<String>,
     pub available: bool,
+    #[serde(default)]
+    pub stock_coverage_percent: u8,
     pub estimate_cents: Option<i64>,
     pub estimate_status: String,
     pub ingredients: Vec<IngredientEstimate>,
@@ -83,6 +86,8 @@ fn canonical_name(name: &str) -> String {
         "banana" | "bananas" => "bananas".into(),
         "white rice" | "rice" => "rice".into(),
         "pasta noodles" | "pasta" => "pasta".into(),
+        "canned beans" | "canned black beans" | "canned kidney beans" => "canned beans".into(),
+        "rolled oats" | "oats" => "oats".into(),
         _ => normalized,
     }
 }
@@ -94,6 +99,7 @@ fn unit_scale(unit: &str) -> (String, Decimal) {
         "gal" | "gallon" | "gallons" => ("volume_fl_oz".into(), Decimal::from(128)),
         "fl oz" | "fluid ounce" | "fluid ounces" => ("volume_fl_oz".into(), Decimal::ONE),
         "each" | "ea" | "ct" | "count" => ("each".into(), Decimal::ONE),
+        "can" | "cans" | "tin" | "tins" => ("each".into(), Decimal::ONE),
         "egg" | "eggs" => ("egg".into(), Decimal::ONE),
         other => (other.into(), Decimal::ONE),
     }
@@ -107,6 +113,9 @@ pub fn suggest_meals(
     let today = NaiveDate::parse_from_str(today, "%Y-%m-%d").map_err(|e| e.to_string())?;
     let mut suggestions = Vec::new();
     for recipe in recipes {
+        if recipe.ingredients.is_empty() {
+            return Err("recipe has no ingredients".into());
+        }
         let mut stock: Vec<WorkingLot> = snapshot
             .lots
             .iter()
@@ -146,6 +155,7 @@ pub fn suggest_meals(
         let mut total_cents = 0_i64;
         let mut estimate_unknown = false;
         let mut available = true;
+        let mut stock_fraction_sum = Decimal::ZERO;
         for ingredient in &recipe.ingredients {
             let required = decimal(&ingredient.quantity)?;
             if required <= Decimal::ZERO {
@@ -202,6 +212,7 @@ pub fn suggest_meals(
             if remaining > Decimal::ZERO {
                 available = false;
             }
+            stock_fraction_sum += Decimal::ONE - remaining / (required * required_scale);
             total_cents = total_cents
                 .checked_add(cost_cents)
                 .ok_or("meal estimate overflow")?;
@@ -217,12 +228,20 @@ pub fn suggest_meals(
                 missing_quantity: (remaining / required_scale).normalize().to_string(),
             });
         }
+        let ingredient_count = u32::try_from(recipe.ingredients.len())
+            .map_err(|_| "recipe has too many ingredients")?;
+        let stock_coverage_percent = (stock_fraction_sum / Decimal::from(ingredient_count)
+            * Decimal::from(100))
+        .floor()
+        .to_u8()
+        .ok_or("recipe stock coverage is out of range")?;
         suggestions.push(MealSuggestion {
             id: recipe.id.clone(),
             name: recipe.name.clone(),
             servings: recipe.servings,
             steps: recipe.steps.clone(),
             available,
+            stock_coverage_percent,
             estimate_cents: if estimate_unknown {
                 None
             } else {
@@ -266,6 +285,7 @@ pub fn suggest_meals(
                 false
             },
             if meal.available { 0 } else { missing_count },
+            std::cmp::Reverse(meal.stock_coverage_percent),
             if meal.available {
                 soonest_expiry
             } else {
