@@ -1,0 +1,81 @@
+name: HungerStrike hosted batch capture
+
+on:
+  push:
+    branches: [verification/hungerstrike-batch-capture-2026-10-16]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  capture:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Require exact application source from PR 3
+        shell: pwsh
+        run: |
+          git diff --exit-code 6d0bf4bcfcf662f70ef142512f1a68f72aec2738 -- Cargo.toml Cargo.lock core desktop assets
+          if ($LASTEXITCODE -ne 0) { throw 'Application source differs from PR 3' }
+      - uses: actions/download-artifact@v4
+        with:
+          name: hungerstrike-pantry-preview-38955134249
+          run-id: 38955134249
+          github-token: ${{ github.token }}
+          path: preview
+      - name: Capture source-matched synthetic Plan next window
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $PWD 'preview/target/debug/hungerstrike-rust-desktop.exe'
+          $manifest = (Get-Content -LiteralPath 'preview/SHA256.txt' -Raw).Trim() -split '\s+'
+          if ($manifest.Count -ne 2) { throw 'Preview manifest is invalid' }
+          $item = Get-Item -LiteralPath $exe
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+          if ($item.Length -ne [long]$manifest[0] -or $hash -ne $manifest[1]) { throw 'Preview executable does not match CI manifest' }
+          New-Item -ItemType Directory -Force 'capture' | Out-Null
+          $env:HUNGERSTRIKE_DATA_DIR = Join-Path $env:RUNNER_TEMP 'hungerstrike-batch-capture-profile'
+          $env:HUNGERSTRIKE_ASSETS_DIR = (Resolve-Path 'assets').Path
+          $env:HUNGERSTRIKE_CAPTURE_DEMO = 'plan-next'
+          $env:HUNGERSTRIKE_CAPTURE_SIZE = '1600x900'
+          $out = Join-Path $PWD 'capture/plan-next-baseline.png'
+          $env:HUNGERSTRIKE_CAPTURE_PATH = $out
+          $process = Start-Process -FilePath $exe -PassThru -WindowStyle Normal -RedirectStandardOutput 'capture/stdout.log' -RedirectStandardError 'capture/stderr.log'
+          try {
+            $stable = 0
+            $previous = -1
+            for ($i = 0; $i -lt 120; $i++) {
+              Start-Sleep -Milliseconds 500
+              $process.Refresh()
+              if ($process.HasExited) { throw "App exited before capture: $($process.ExitCode)" }
+              if (Test-Path -LiteralPath $out) {
+                $bytes = (Get-Item -LiteralPath $out).Length
+                if ($bytes -eq $previous -and $bytes -gt 1000) { $stable++ } else { $stable = 0 }
+                $previous = $bytes
+                if ($stable -ge 2) { break }
+              }
+            }
+            if ($stable -lt 2) { throw 'No complete app screenshot in 60 seconds' }
+            $png = [System.IO.File]::ReadAllBytes($out)
+            if ($png.Length -gt 3145728) { throw 'PNG exceeds 3 MiB cap' }
+            $image = [System.Drawing.Image]::FromFile($out)
+            try {
+              if ($image.Width -ne 1600 -or $image.Height -ne 900) { throw 'Unexpected PNG dimensions' }
+            } finally { $image.Dispose() }
+            Write-Output "source=6d0bf4bcfcf662f70ef142512f1a68f72aec2738 exe_bytes=$($item.Length) exe_sha256=$hash png_bytes=$($png.Length) png_sha256=$((Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash)"
+          } finally {
+            $process.Refresh()
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hungerstrike-batch-baseline-${{ github.run_id }}
+          path: |
+            capture/plan-next-baseline.png
+            capture/stderr.log
+          if-no-files-found: error
+          retention-days: 1
