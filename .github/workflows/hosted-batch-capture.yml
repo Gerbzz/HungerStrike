@@ -41,7 +41,7 @@ jobs:
           $env:HUNGERSTRIKE_DATA_DIR = Join-Path $env:RUNNER_TEMP 'hungerstrike-batch-capture-profile'
           $env:HUNGERSTRIKE_ASSETS_DIR = (Resolve-Path 'assets').Path
           $env:HUNGERSTRIKE_CAPTURE_DEMO = 'plan-next'
-          $env:HUNGERSTRIKE_CAPTURE_SIZE = '1600x900'
+          $env:HUNGERSTRIKE_CAPTURE_SIZE = '1280x720'
           $out = Join-Path $PWD 'capture/plan-next-baseline.png'
           $env:HUNGERSTRIKE_CAPTURE_PATH = $out
           $process = Start-Process -FilePath $exe -PassThru -WindowStyle Normal -RedirectStandardOutput 'capture/stdout.log' -RedirectStandardError 'capture/stderr.log'
@@ -71,7 +71,7 @@ jobs:
             if ($png.Length -gt 3145728) { throw 'PNG exceeds 3 MiB cap' }
             $image = [System.Drawing.Image]::FromFile($out)
             try {
-              if ($image.Width -ne 1600 -or $image.Height -ne 900) { throw 'Unexpected PNG dimensions' }
+              if ($image.Width -ne 1280 -or $image.Height -ne 720) { throw 'Unexpected PNG dimensions' }
             } finally { $image.Dispose() }
             Write-Output "source=6d0bf4bcfcf662f70ef142512f1a68f72aec2738 exe_bytes=$($item.Length) exe_sha256=$hash png_bytes=$($png.Length) png_sha256=$((Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash)"
           } finally {
