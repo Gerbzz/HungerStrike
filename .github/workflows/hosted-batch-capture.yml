@@ -51,12 +51,19 @@ jobs:
             for ($i = 0; $i -lt 120; $i++) {
               Start-Sleep -Milliseconds 500
               $process.Refresh()
-              if ($process.HasExited) { throw "App exited before capture: $($process.ExitCode)" }
               if (Test-Path -LiteralPath $out) {
                 $bytes = (Get-Item -LiteralPath $out).Length
                 if ($bytes -eq $previous -and $bytes -gt 1000) { $stable++ } else { $stable = 0 }
                 $previous = $bytes
                 if ($stable -ge 2) { break }
+              }
+              if ($process.HasExited) {
+                if (Test-Path -LiteralPath $out) {
+                  $stable = 2
+                  break
+                }
+                Get-Content -LiteralPath 'capture/stderr.log' -Tail 35 -ErrorAction SilentlyContinue
+                throw "App exited before complete capture: $($process.ExitCode)"
               }
             }
             if ($stable -lt 2) { throw 'No complete app screenshot in 60 seconds' }
@@ -72,10 +79,12 @@ jobs:
             if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
           }
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: hungerstrike-batch-baseline-${{ github.run_id }}
           path: |
             capture/plan-next-baseline.png
+            capture/stdout.log
             capture/stderr.log
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 1
