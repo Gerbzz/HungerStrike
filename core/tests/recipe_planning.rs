@@ -439,14 +439,22 @@ fn invalid_combined_plan_leaves_persisted_shopping_unchanged() {
     let path = dir.path().join("stock.sqlite");
     let mut store = Store::open(&path).unwrap();
     confirm_receipt(&mut store, review(parse_text(RECEIPT)).unwrap()).unwrap();
-    let valid = shopping_recipe("valid", "rice", "0.25", "lb");
-    add_recipe_missing_to_shopping(&mut store, &valid, "2026-10-04").unwrap();
+    let saved = shopping_recipe("saved", "rice", "0.25", "lb");
+    add_recipe_missing_to_shopping(&mut store, &saved, "2026-10-04").unwrap();
+    let initial_shopping = snapshot(&store).unwrap().shopping;
+    assert_eq!(initial_shopping.len(), 1);
+    assert_eq!(initial_shopping[0].quantity, "0.25");
     let before = export_backup(&store).unwrap().to_bytes().unwrap();
+    // A premature write of this valid first entry would increase saved rice to 0.5 lb.
+    let valid = shopping_recipe("valid", "rice", "0.5", "lb");
     let invalid = shopping_recipe("invalid", "rice", "0", "lb");
     assert!(add_recipes_missing_to_shopping(&mut store, &[valid, invalid], "2026-10-04").is_err());
     assert!(add_recipes_missing_to_shopping(&mut store, &[], "2026-10-04").is_err());
     drop(store);
     let reopened = Store::open(&path).unwrap();
+    let persisted_shopping = snapshot(&reopened).unwrap().shopping;
+    assert_eq!(persisted_shopping.len(), 1);
+    assert_eq!(persisted_shopping[0].quantity, "0.25");
     assert_eq!(
         export_backup(&reopened).unwrap().to_bytes().unwrap(),
         before

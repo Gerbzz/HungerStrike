@@ -296,10 +296,7 @@ impl AppState {
                 self.meal_filter = MealFilter::PlanNext;
                 self.selected_recipe_id = None;
                 self.message = if shopping == before {
-                    format!(
-                        "No additional groceries needed for {} selected meals. Current stock or saved shopping quantities cover this plan; larger saved quantities are retained.",
-                        recipes.len()
-                    )
+                    "Shopping list unchanged; any missing groceries are already listed.".into()
                 } else {
                     format!(
                         "Combined grocery needs for {} selected meals saved. Larger existing shopping quantities were retained.",
@@ -990,7 +987,7 @@ mod tests {
     }
 
     #[test]
-    fn batch_feedback_distinguishes_stock_covered_and_retained_quantities() {
+    fn batch_feedback_distinguishes_unchanged_and_retained_quantities() {
         let mut store = Store::open_in_memory().unwrap();
         confirm_receipt(&mut store, review(parse_text(RECEIPT)).unwrap()).unwrap();
         let mut state = AppState::new(store, "2026-10-04".into()).unwrap();
@@ -1012,7 +1009,10 @@ mod tests {
             )]))
             .unwrap();
         assert!(state.snapshot.shopping.is_empty());
-        assert!(state.message.starts_with("No additional groceries needed"));
+        assert_eq!(
+            state.message,
+            "Shopping list unchanged; any missing groceries are already listed."
+        );
         assert!(state.meal_filter == MealFilter::PlanNext);
 
         state
@@ -1032,9 +1032,9 @@ mod tests {
             )]))
             .unwrap();
         assert_eq!(state.snapshot.shopping[0].quantity, "0.25");
-        assert!(state.message.starts_with("No additional groceries needed"));
-        assert!(state
-            .message
-            .contains("larger saved quantities are retained"));
+        assert_eq!(
+            state.message,
+            "Shopping list unchanged; any missing groceries are already listed."
+        );
     }
 }
