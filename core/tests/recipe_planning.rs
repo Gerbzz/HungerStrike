@@ -136,6 +136,48 @@ fn canned_bean_recipe_matches_a_counted_pantry_lot() {
     assert_eq!(suggestion.consumption[0].lot_id, "synthetic-beans");
 }
 
+#[test]
+fn canned_beans_accept_tins_but_not_dry_names_or_mass_units() {
+    let mut state = snapshot(&seeded()).unwrap();
+    let mut beans = state.lots[0].clone();
+    beans.id = "synthetic-tin".into();
+    beans.name = "canned kidney beans".into();
+    beans.category = "food.pantry".into();
+    beans.zone = "pantry".into();
+    beans.quantity = "1".into();
+    beans.unit = "tin".into();
+    beans.expiry_date = None;
+    state.lots.push(beans);
+    let meal = recipe("canned beans", "1", "can");
+
+    assert!(suggest_meals(&state, std::slice::from_ref(&meal), "2026-10-04").unwrap()[0].available);
+    state.lots.last_mut().unwrap().name = "dry kidney beans".into();
+    assert!(
+        !suggest_meals(&state, std::slice::from_ref(&meal), "2026-10-04").unwrap()[0].available
+    );
+    let beans = state.lots.last_mut().unwrap();
+    beans.name = "canned beans".into();
+    beans.unit = "lb".into();
+    assert!(!suggest_meals(&state, &[meal], "2026-10-04").unwrap()[0].available);
+}
+
+#[test]
+fn stock_coverage_averages_fractions_across_ingredients() {
+    let mut meal = recipe("spinach", "6", "oz");
+    meal.ingredients.push(RecipeIngredient {
+        name: "pasta".into(),
+        quantity: "1".into(),
+        unit: "each".into(),
+    });
+    let result = suggest_meals(&snapshot(&seeded()).unwrap(), &[meal], "2026-10-04")
+        .unwrap()
+        .remove(0);
+    assert!(!result.available);
+    assert_eq!(result.stock_coverage_percent, 91);
+    assert_eq!(result.ingredients[0].missing_quantity, "1");
+    assert_eq!(result.ingredients[1].missing_quantity, "0");
+}
+
 fn recipe(name: &str, quantity: &str, unit: &str) -> Recipe {
     Recipe {
         id: "test-meal".into(),

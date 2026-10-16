@@ -543,7 +543,11 @@ fn main() {
         state.show_about = demo.as_deref() == Some("about");
         if matches!(demo.as_deref(), Some("plan-next" | "plan-added")) {
             state.meal_filter = MealFilter::PlanNext;
-            state.selected_recipe_id = Some("tomato-pasta".into());
+            state.selected_recipe_id = if demo.as_deref() == Some("plan-added") {
+                Some("tomato-pasta".into())
+            } else {
+                None
+            };
         }
     }
     let resolution = std::env::var("HUNGERSTRIKE_CAPTURE_SIZE")
