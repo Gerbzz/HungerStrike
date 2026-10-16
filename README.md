@@ -58,7 +58,7 @@ cargo test --workspace
 
 ## Status and data
 
-This is a **Windows alpha draft source preview**. The [light-interface recovery record](docs/verification/LIGHT_UI_SOURCE_RECOVERY.md) tracks its source. The latest draft source passed 73 offline workspace tests (55 core, 18 desktop). Earlier draft source `2c122bf` built as a guarded desktop release, and the source-labeled light captures show isolated synthetic shopping and post-Cook stock. The later recipe date-ordering and freshness-cue changes have not received a new release capture. Native mouse and keyboard interaction remains unverified.
+This is a **Windows alpha source preview**. The [light-interface recovery record](docs/verification/LIGHT_UI_SOURCE_RECOVERY.md) tracks its source. The reviewed source passed 73 offline workspace tests (55 core, 18 desktop). Earlier source `2c122bf` built as a guarded desktop release, and the source-labeled light captures show isolated synthetic shopping and post-Cook stock. The later recipe date-ordering and freshness-cue changes have not received a new release capture. Native mouse and keyboard interaction remains unverified.
 
 The [2026-10-10 verification record](verification.md) reports 57 passing workspace tests and inspected application-rendered frames on one Windows 11/NVIDIA setup. Native mouse and keyboard click-through, file dialogs, accessibility, other devices, and broader receipt/photo acceptance remain open. The separate [Android preview source branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has no APK release or physical-device validation.
 
