@@ -1,7 +1,7 @@
 {
-  "label": "SYNTHETIC TEST DATA — ORIGINAL TEST RECIPES",
+  "label": "ORIGINAL LOCALLY BUNDLED STARTER RECIPES",
   "version": 1,
-  "notes": "Original simple test recipes only. No scraped or licensed recipe collection, nutrition calculation, or medical claim.",
+  "notes": "Original simple starter recipes only. No scraped or licensed recipe collection, live prices, nutrition calculation, or medical claim.",
   "recipes": [
     {
       "id": "egg-spinach-scramble",
@@ -54,6 +54,26 @@
       "expected_with_confirmed_fixture_stock": "missing_chicken_R003_unconfirmed",
       "expected_estimate_cents_after_fixture_events": 47,
       "estimate_status": "partial_missing_ingredient"
+    },
+    {
+      "id": "spinach-pasta",
+      "name": "Spinach pasta",
+      "servings": 1,
+      "ingredients": [
+        {"name":"pasta","quantity":"1","unit":"each"},
+        {"name":"spinach","quantity":"1","unit":"oz"}
+      ],
+      "steps": ["Cook pasta according to its package.", "Wilt spinach and toss it with the cooked pasta."]
+    },
+    {
+      "id": "banana-yogurt-bowl",
+      "name": "Banana and yogurt bowl",
+      "servings": 1,
+      "ingredients": [
+        {"name":"banana","quantity":"0.25","unit":"lb"},
+        {"name":"yogurt","quantity":"1","unit":"each"}
+      ],
+      "steps": ["Slice the banana.", "Serve it with yogurt."]
     }
   ]
 }

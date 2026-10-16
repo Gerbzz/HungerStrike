@@ -1,0 +1,2 @@
+# Keep glTF source bytes and their recorded hashes stable across checkouts.
+assets/models/**/*.gltf -text -diff

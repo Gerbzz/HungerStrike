@@ -1,6 +1,8 @@
-# Archived dark Kitchen screenshot provenance
+# HungerStrike screenshot provenance
 
-The retained `assets/screenshots/hungerstrike-kitchen-current.png` is an uncomposited 1440 x 900 frame saved on October 14, 2026 from the older public HungerStrike Windows source. It is no longer the README hero; the README now displays a separately sourced light-interface development preview. SHA-256: `50D8D016360E5F4B92043EF61B4AEE9E2643750A9019DBCBA0A7F36C57FDD21E`. The image was visually inspected. It shows the app's 3D kitchen and confirmed stock from first-party synthetic receipt fixtures; no real receipt, client data, or personal workstation path appears in it.
+The repository retains `assets/screenshots/hungerstrike-kitchen-current.png` as an **older public-version capture**, an uncomposited 1440 × 900 frame saved by the older public HungerStrike Windows desktop app on October 14, 2026. SHA-256: `50D8D016360E5F4B92043EF61B4AEE9E2643750A9019DBCBA0A7F36C57FDD21E`. The image was visually inspected. It shows the app's 3D kitchen and confirmed stock from first-party synthetic receipt fixtures; no real receipt, client data, or personal workstation path appears in it.
+
+This frame does not show the newer light interface. The [new source-matched light captures](LIGHT_SCREENSHOT_PROVENANCE.md) are documented separately.
 
 The desktop source was built from public source revision `a55700a6b36b9d390f678b77da43cb43f23bf09f` with `cargo build --offline --locked -p hungerstrike-rust-desktop -j 1` and an existing local target cache. The build completed in 26.44 seconds. The executable SHA-256 is `C8B26E6EC4C5791902246053DF3FA84B3CBE2F56A9CFEA9517A86BCC2BCB480C`. The subsequent public commit `c4b1d3d` changed only `.gitignore`, `README.md`, and this documentation; it did not change the app source. The binary depfile points to the public checkout's Rust source and included fixture files.
 

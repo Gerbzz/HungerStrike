@@ -1,0 +1,42 @@
+{
+  "label": "SYNTHETIC TEST DATA - NOT A REAL TRANSACTION",
+  "fixture_id": "VIS-U001",
+  "purchase_date": "2026-10-04",
+  "currency": "USD",
+  "money_unit": "integer_cents",
+  "fixture_notice": "Invented values only; not current store prices or tax guidance.",
+  "printed_subtotal_cents": 728,
+  "printed_tax_cents": 0,
+  "printed_total_cents": 728,
+  "before_confirmation": {
+    "status": "needs_explicit_category_correction",
+    "inventory_writes": 0
+  },
+  "after_explicit_correction_and_confirmation": {
+    "receipt_count": 1,
+    "cash_flow_cents": 728,
+    "items": [
+      {
+        "name": "apple juice",
+        "quantity": "1",
+        "unit": "gal",
+        "cost_cents": 429,
+        "category": "food.beverage",
+        "expiry_date": null,
+        "visual": "neutral_unknown_box",
+        "final_zone": "fridge",
+        "zone_note": "explicit synthetic move after confirmation"
+      },
+      {
+        "name": "fresh tomatoes",
+        "quantity": "1",
+        "unit": "lb",
+        "cost_cents": 299,
+        "category": "food.produce",
+        "expiry_date": null,
+        "visual": "neutral_unknown_box",
+        "final_zone": "fridge"
+      }
+    ]
+  }
+}

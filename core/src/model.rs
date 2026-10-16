@@ -104,6 +104,13 @@ pub struct LotView {
     pub purchase_date: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShoppingItem {
+    pub name: String,
+    pub quantity: String,
+    pub unit: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppSnapshot {
     pub receipt_count: usize,
@@ -119,6 +126,8 @@ pub struct AppSnapshot {
     pub unpriced_lot_count: usize,
     pub refund_without_stock_reversal_cents: i64,
     pub lots: Vec<LotView>,
+    #[serde(default)]
+    pub shopping: Vec<ShoppingItem>,
     pub receipt_items: Vec<ReceiptItemView>,
     pub category_edits: Vec<CategoryEdit>,
     pub receipt_edits: Vec<ReceiptEdit>,

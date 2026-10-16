@@ -19,9 +19,12 @@ pub use ledger::{
 };
 pub use model::{
     AppSnapshot, CategoryEdit, ConfirmOutcome, InventoryAction, LotView, ReceiptEdit,
-    ReceiptItemView,
+    ReceiptItemView, ShoppingItem,
 };
 pub use model::{DraftItem, DraftStatus, ReceiptDraft, RefundLine, ReviewError, ReviewedReceipt};
 pub use receipt::{parse_text, review};
-pub use recipes::{suggest_meals, MealSuggestion, RecipeCollection};
+pub use recipes::{
+    add_recipe_missing_to_shopping, cook_recipe, remove_shopping_item, suggest_meals, LotUse,
+    MealSuggestion, Recipe, RecipeCollection, RecipeIngredient,
+};
 pub use store::Store;

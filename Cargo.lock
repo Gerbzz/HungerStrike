@@ -3274,6 +3274,7 @@ dependencies = [
  "bevy_egui",
  "chrono",
  "hungerstrike-core",
+ "image",
  "rfd",
  "serde_json",
  "tempfile",
@@ -3419,6 +3420,8 @@ dependencies = [
  "num-traits",
  "png",
  "tiff",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]
