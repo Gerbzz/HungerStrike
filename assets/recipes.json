@@ -74,6 +74,46 @@
         {"name":"yogurt","quantity":"1","unit":"each"}
       ],
       "steps": ["Slice the banana.", "Serve it with yogurt."]
+    },
+    {
+      "id": "bean-rice-bowl",
+      "name": "Bean and rice bowl",
+      "servings": 1,
+      "ingredients": [
+        {"name":"canned beans","quantity":"1","unit":"can"},
+        {"name":"rice","quantity":"0.25","unit":"lb"}
+      ],
+      "steps": ["Cook the rice.", "Drain and rinse canned beans, then heat them until hot.", "Serve the beans over rice."]
+    },
+    {
+      "id": "spinach-rice-bowl",
+      "name": "Spinach and rice bowl",
+      "servings": 1,
+      "ingredients": [
+        {"name":"rice","quantity":"0.25","unit":"lb"},
+        {"name":"spinach","quantity":"1","unit":"oz"}
+      ],
+      "steps": ["Cook the rice.", "Wilt the spinach and combine it with the rice."]
+    },
+    {
+      "id": "tomato-egg-skillet",
+      "name": "Tomato and egg skillet",
+      "servings": 1,
+      "ingredients": [
+        {"name":"large eggs","quantity":"2","unit":"egg"},
+        {"name":"tomatoes","quantity":"0.25","unit":"lb"}
+      ],
+      "steps": ["Chop the tomatoes and warm them in a skillet.", "Add beaten eggs and cook until fully set."]
+    },
+    {
+      "id": "banana-oat-bowl",
+      "name": "Banana oat bowl",
+      "servings": 1,
+      "ingredients": [
+        {"name":"oats","quantity":"2","unit":"oz"},
+        {"name":"banana","quantity":"0.25","unit":"lb"}
+      ],
+      "steps": ["Cook oats with water according to their package.", "Slice the banana and add it to the cooked oats."]
     }
   ]
 }

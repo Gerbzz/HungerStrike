@@ -1205,7 +1205,7 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
 fn meals(ui: &mut egui::Ui, state: &mut AppState) {
     ui.set_max_width(810.0);
     ui.heading("Meals from your kitchen");
-    ui.label("Six original recipes bundled locally. Suggestions use confirmed fridge, freezer, and pantry stock.");
+    ui.label("Original recipes bundled locally. Suggestions use confirmed fridge, freezer, and pantry stock.");
     ui.horizontal(|ui| {
         ui.label("Plan for YYYY-MM-DD");
         ui.text_edit_singleline(&mut state.reference_date);
@@ -1358,7 +1358,31 @@ fn meal_card(ui: &mut egui::Ui, meal: &MealSuggestion, selected: bool, state: &m
                 meal.ingredients.len()
             ));
             if !meal.available {
-                ui.label("Missing groceries are unpriced");
+                let missing: Vec<_> = meal
+                    .ingredients
+                    .iter()
+                    .filter(|ingredient| ingredient.missing_quantity != "0")
+                    .collect();
+                let preview = missing
+                    .iter()
+                    .take(2)
+                    .map(|ingredient| {
+                        format!(
+                            "{} {} {}",
+                            ingredient.missing_quantity, ingredient.unit, ingredient.name
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                ui.label(format!(
+                    "{}% of recipe quantities on hand; missing grocery prices unknown",
+                    meal.stock_coverage_percent
+                ));
+                ui.label(if missing.len() > 2 {
+                    format!("Get: {preview}, and {} more", missing.len() - 2)
+                } else {
+                    format!("Get: {preview}")
+                });
             } else if !meal.soon_expiring.is_empty() {
                 ui.colored_label(
                     egui::Color32::from_rgb(160, 96, 30),
@@ -1885,6 +1909,7 @@ mod tests {
             servings: 1,
             steps: vec![],
             available,
+            stock_coverage_percent: if available { 100 } else { 50 },
             estimate_cents: None,
             estimate_status: String::new(),
             ingredients: vec![],

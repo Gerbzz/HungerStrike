@@ -7,6 +7,20 @@ use hungerstrike_core::{
 const RECIPES: &str = include_str!("../../assets/recipes.json");
 const RECEIPT: &str = include_str!("fixtures/receipts/R001-purchase.txt");
 
+#[test]
+fn bundled_pantry_recipes_have_unique_ids_and_positive_ingredients() {
+    let collection: RecipeCollection = serde_json::from_str(RECIPES).unwrap();
+    assert_eq!(collection.recipes.len(), 10);
+    let mut ids = std::collections::HashSet::new();
+    for meal in &collection.recipes {
+        assert!(ids.insert(&meal.id));
+        assert!(!meal.ingredients.is_empty());
+        assert!(meal.ingredients.iter().all(|item| {
+            item.quantity.parse::<rust_decimal::Decimal>().unwrap() > rust_decimal::Decimal::ZERO
+        }));
+    }
+}
+
 fn seeded() -> Store {
     let mut store = Store::open_in_memory().unwrap();
     confirm_receipt(&mut store, review(parse_text(RECEIPT)).unwrap()).unwrap();
@@ -68,6 +82,58 @@ fn plan_next_prioritizes_fewer_missing_ingredients() {
         .position(|meal| meal.id == "chicken-rice-skillet")
         .unwrap();
     assert!(tomato < chicken);
+}
+
+#[test]
+fn plan_next_prefers_more_usable_stock_when_missing_counts_tie() {
+    let mut nearly_ready = recipe("spinach", "6", "oz");
+    nearly_ready.id = "nearly-ready".into();
+    nearly_ready.name = "Z nearly ready".into();
+    let mut less_ready = recipe("spinach", "10", "oz");
+    less_ready.id = "less-ready".into();
+    less_ready.name = "A less ready".into();
+
+    let suggestions = suggest_meals(
+        &snapshot(&seeded()).unwrap(),
+        &[less_ready, nearly_ready],
+        "2026-10-04",
+    )
+    .unwrap();
+    assert_eq!(suggestions[0].id, "nearly-ready");
+    assert_eq!(suggestions[0].stock_coverage_percent, 83);
+    assert_eq!(suggestions[1].stock_coverage_percent, 50);
+}
+
+#[test]
+fn empty_recipe_cannot_be_suggested_as_ready() {
+    let mut empty = recipe("spinach", "1", "oz");
+    empty.ingredients.clear();
+    assert_eq!(
+        suggest_meals(&snapshot(&seeded()).unwrap(), &[empty], "2026-10-04").unwrap_err(),
+        "recipe has no ingredients"
+    );
+}
+
+#[test]
+fn canned_bean_recipe_matches_a_counted_pantry_lot() {
+    let mut state = snapshot(&seeded()).unwrap();
+    let mut beans = state.lots[0].clone();
+    beans.id = "synthetic-beans".into();
+    beans.name = "canned black beans".into();
+    beans.category = "food.pantry".into();
+    beans.zone = "pantry".into();
+    beans.quantity = "1".into();
+    beans.unit = "each".into();
+    beans.expiry_date = None;
+    state.lots.push(beans);
+
+    let meal = recipe("canned beans", "1", "can");
+    let suggestion = suggest_meals(&state, &[meal], "2026-10-04")
+        .unwrap()
+        .remove(0);
+    assert!(suggestion.available);
+    assert_eq!(suggestion.stock_coverage_percent, 100);
+    assert_eq!(suggestion.consumption[0].lot_id, "synthetic-beans");
 }
 
 fn recipe(name: &str, quantity: &str, unit: &str) -> Recipe {

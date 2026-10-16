@@ -1,0 +1,24 @@
+name: Pantry recommendations
+
+on:
+  push:
+    branches:
+      - feature/pantry-recommendations-2026-10-16
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 55
+    env:
+      CARGO_BUILD_JOBS: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Rust formatting
+        run: cargo fmt --all --check
+      - name: Test core and desktop workspace
+        run: cargo test --locked --workspace

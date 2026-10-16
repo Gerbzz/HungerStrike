@@ -33,7 +33,7 @@ Browse the fridge, freezer, and pantry in the 3D scene or the matching stock lis
 
 ### Plan meals from confirmed stock
 
-Six original recipes are bundled locally. Cook now uses sufficient confirmed stock; Use soon prioritizes recipes using dated stock; Plan next shows missing quantities and saves selected needs to a local shopping list. The selected recipe previews the exact lots before an explicit Cook action updates inventory. Recorded stock costs and known budgets are shown, while missing-grocery prices remain unknown.
+Ten original recipes are bundled locally, including pantry staples such as rice, canned beans, and oats. Cook now uses sufficient confirmed stock; Use soon prioritizes recipes using dated stock; Plan next ranks missing-grocery ideas by the number of missing ingredients and then by how much of their required quantities are on hand. It shows missing quantities and saves selected needs to a local shopping list. The selected recipe previews the exact lots before an explicit Cook action updates inventory. Recorded stock costs and known budgets are shown, while missing-grocery prices remain unknown. [Recommendation method and limits](docs/PANTRY_RECOMMENDATIONS_2026-10-16.md).
 
 ### Keep spending and stock use distinct
 
