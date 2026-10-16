@@ -35,6 +35,10 @@ Browse the fridge, freezer, and pantry in the 3D scene or the matching stock lis
 
 Ten original recipes are bundled locally, including pantry staples such as rice, canned beans, and oats. Cook now uses sufficient confirmed stock; Use soon prioritizes recipes using dated stock; Plan next ranks missing-grocery ideas by the number of missing ingredients and then by how much of their required quantities are on hand. It shows missing quantities and saves selected needs to a local shopping list. The selected recipe previews the exact lots before an explicit Cook action updates inventory. Recorded stock costs and known budgets are shown, while missing-grocery prices remain unknown. [Recommendation method and limits](docs/PANTRY_RECOMMENDATIONS_2026-10-16.md).
 
+<p align="center"><img src="assets/screenshots/hungerstrike-plan-next-66f5dca-1600x900.png" alt="Native Plan next view from the 66f5dca source preview with synthetic pantry stock, ranked meal ideas, missing grocery quantities, and the selected recipe details" width="900"></p>
+
+The [current Plan next view](assets/screenshots/hungerstrike-plan-next-66f5dca-1600x900.png) and [1280 x 720 view](assets/screenshots/hungerstrike-plan-next-66f5dca-1280x720.png) are app-rendered synthetic frames from the `66f5dca` source. See the [native capture record](docs/PANTRY_NATIVE_PREVIEW_2026-10-16.md) for hashes and review limits.
+
 ### Keep spending and stock use distinct
 
 The spending view separates receipt cash flow, food and household allocations, refunds, consumed food, and discarded food. Weekly and monthly budgets use those reviewed figures without counting stock use as another purchase.
@@ -58,7 +62,7 @@ cargo test --workspace
 
 ## Status and data
 
-This is a **Windows alpha source preview**. The [light-interface recovery record](docs/verification/LIGHT_UI_SOURCE_RECOVERY.md) tracks its source. The reviewed source passed 73 offline workspace tests (55 core, 18 desktop). Earlier source `2c122bf` built as a guarded desktop release, and the source-labeled light captures show isolated synthetic shopping and post-Cook stock. The later recipe date-ordering and freshness-cue changes have not received a new release capture. Native mouse and keyboard interaction remains unverified.
+This is a **Windows alpha source preview**. The [light-interface recovery record](docs/verification/LIGHT_UI_SOURCE_RECOVERY.md) tracks its source. The pantry recommendation source at `66f5dca` passed 79 hosted Windows workspace tests (61 core, 18 desktop), and its debug executable produced the two native Plan next frames above. Earlier source `2c122bf` built as a guarded desktop release; the later recipe date-ordering and freshness-cue changes have not received a new release capture. Native mouse and keyboard interaction remains unverified.
 
 The [2026-10-10 verification record](verification.md) reports 57 passing workspace tests and inspected application-rendered frames on one Windows 11/NVIDIA setup. Native mouse and keyboard click-through, file dialogs, accessibility, other devices, and broader receipt/photo acceptance remain open. The separate [Android preview source branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has no APK release or physical-device validation.
 
