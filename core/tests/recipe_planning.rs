@@ -405,7 +405,7 @@ fn combined_shortage_excludes_expired_stock_but_uses_undated_stock() {
     assert!(stock
         .lots
         .iter()
-        .any(|lot| lot.name == "banana" && lot.expiry_date.is_none()));
+        .any(|lot| lot.name == "bananas" && lot.expiry_date.is_none()));
     let meals = [
         shopping_recipe("spinach", "spinach", "1", "oz"),
         shopping_recipe("banana", "banana", "0.25", "lb"),
