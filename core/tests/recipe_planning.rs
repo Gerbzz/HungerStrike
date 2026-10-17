@@ -1,7 +1,8 @@
 use hungerstrike_core::{
-    add_recipe_missing_to_shopping, apply_import, confirm_receipt, cook_recipe, export_backup,
-    parse_text, record_inventory_action, review, snapshot, suggest_meals, InventoryAction, Recipe,
-    RecipeCollection, RecipeIngredient, ReplaceOrReconcile, Store,
+    add_recipe_missing_to_shopping, add_recipes_missing_to_shopping, apply_import, confirm_receipt,
+    cook_recipe, export_backup, parse_text, record_inventory_action, review, snapshot,
+    suggest_meals, InventoryAction, Recipe, RecipeCollection, RecipeIngredient, ReplaceOrReconcile,
+    Store,
 };
 
 const RECIPES: &str = include_str!("../../assets/recipes.json");
@@ -25,6 +26,20 @@ fn seeded() -> Store {
     let mut store = Store::open_in_memory().unwrap();
     confirm_receipt(&mut store, review(parse_text(RECEIPT)).unwrap()).unwrap();
     store
+}
+
+fn shopping_recipe(id: &str, name: &str, quantity: &str, unit: &str) -> Recipe {
+    Recipe {
+        id: id.into(),
+        name: id.into(),
+        servings: 1,
+        ingredients: vec![RecipeIngredient {
+            name: name.into(),
+            quantity: quantity.into(),
+            unit: unit.into(),
+        }],
+        steps: vec!["Prepare the ingredient.".into()],
+    }
 }
 
 #[test]
@@ -288,6 +303,162 @@ fn missing_quantities_are_saved_once_and_survive_reopen() {
     assert_eq!(state.shopping[0].name, "tomatoes");
     assert_eq!(state.shopping[0].quantity, "0.25");
     assert_eq!(state.shopping[0].unit, "lb");
+}
+
+#[test]
+fn selected_meals_share_stock_and_repeat_saves_are_idempotent() {
+    let mut store = seeded();
+    let recipes: Vec<_> = ["first", "second"]
+        .into_iter()
+        .map(|id| Recipe {
+            id: id.into(),
+            name: id.into(),
+            servings: 1,
+            ingredients: vec![RecipeIngredient {
+                name: "spinach".into(),
+                quantity: "3".into(),
+                unit: "oz".into(),
+            }],
+            steps: vec!["Cook spinach.".into()],
+        })
+        .collect();
+    assert!(
+        suggest_meals(&snapshot(&store).unwrap(), &recipes, "2026-10-04")
+            .unwrap()
+            .iter()
+            .all(|meal| meal.available)
+    );
+    let shopping = add_recipes_missing_to_shopping(&mut store, &recipes, "2026-10-04").unwrap();
+    assert_eq!(shopping.len(), 1);
+    assert_eq!(shopping[0].name, "spinach");
+    assert_eq!(shopping[0].quantity, "1");
+    assert_eq!(shopping[0].unit, "oz");
+    let repeated = add_recipes_missing_to_shopping(&mut store, &recipes, "2026-10-04").unwrap();
+    assert_eq!(repeated, shopping);
+}
+
+#[test]
+fn selected_pantry_meals_sum_shared_missing_rice_without_duplicate_rows() {
+    let mut store = seeded();
+    let collection: RecipeCollection = serde_json::from_str(RECIPES).unwrap();
+    let recipes: Vec<_> = collection
+        .recipes
+        .into_iter()
+        .filter(|recipe| ["chicken-rice-skillet", "bean-rice-bowl"].contains(&recipe.id.as_str()))
+        .collect();
+    let shopping = add_recipes_missing_to_shopping(&mut store, &recipes, "2026-10-04").unwrap();
+    let rice: Vec<_> = shopping.iter().filter(|item| item.name == "rice").collect();
+    assert_eq!(rice.len(), 1);
+    assert_eq!(rice[0].quantity, "0.5");
+    assert_eq!(rice[0].unit, "lb");
+    let repeated = add_recipes_missing_to_shopping(&mut store, &recipes, "2026-10-04").unwrap();
+    assert_eq!(repeated, shopping);
+}
+
+#[test]
+fn selected_meals_convert_compatible_units_before_subtracting_stock() {
+    let mut store = seeded();
+    let recipes: Vec<_> = [("pounds", "1", "lb"), ("ounces", "8", "oz")]
+        .into_iter()
+        .map(|(id, quantity, unit)| Recipe {
+            id: id.into(),
+            name: id.into(),
+            servings: 1,
+            ingredients: vec![RecipeIngredient {
+                name: "bananas".into(),
+                quantity: quantity.into(),
+                unit: unit.into(),
+            }],
+            steps: vec!["Slice bananas.".into()],
+        })
+        .collect();
+    let shopping = add_recipes_missing_to_shopping(&mut store, &recipes, "2026-10-04").unwrap();
+    assert_eq!(shopping.len(), 1);
+    assert_eq!(shopping[0].name, "bananas");
+    assert_eq!(shopping[0].quantity, "0.25");
+    assert_eq!(shopping[0].unit, "lb");
+
+    let mut reversed_store = seeded();
+    let reversed: Vec<_> = recipes.iter().rev().cloned().collect();
+    let reversed_shopping =
+        add_recipes_missing_to_shopping(&mut reversed_store, &reversed, "2026-10-04").unwrap();
+    assert_eq!(reversed_shopping.len(), 1);
+    assert_eq!(reversed_shopping[0].quantity, "4");
+    assert_eq!(reversed_shopping[0].unit, "oz");
+    let repeated =
+        add_recipes_missing_to_shopping(&mut reversed_store, &recipes, "2026-10-04").unwrap();
+    assert_eq!(repeated, reversed_shopping);
+}
+
+#[test]
+fn combined_shortage_excludes_expired_stock_but_uses_undated_stock() {
+    let mut receipt = parse_text(RECEIPT);
+    receipt
+        .items
+        .iter_mut()
+        .find(|item| item.name == "spinach")
+        .unwrap()
+        .expiry_date = Some("2026-10-03".into());
+    let mut store = Store::open_in_memory().unwrap();
+    confirm_receipt(&mut store, review(receipt).unwrap()).unwrap();
+    let stock = snapshot(&store).unwrap();
+    assert!(stock
+        .lots
+        .iter()
+        .any(|lot| lot.name == "bananas" && lot.expiry_date.is_none()));
+    let meals = [
+        shopping_recipe("spinach", "spinach", "1", "oz"),
+        shopping_recipe("banana", "banana", "0.25", "lb"),
+    ];
+    let shopping = add_recipes_missing_to_shopping(&mut store, &meals, "2026-10-04").unwrap();
+    assert_eq!(shopping.len(), 1);
+    assert_eq!(shopping[0].name, "spinach");
+    assert_eq!(shopping[0].quantity, "1");
+    assert_eq!(shopping[0].unit, "oz");
+}
+
+#[test]
+fn combined_shortage_updates_smaller_saved_quantity_and_keeps_larger_one() {
+    let mut store = seeded();
+    let first = shopping_recipe("first", "rice", "0.25", "lb");
+    let second = shopping_recipe("second", "rice", "0.25", "lb");
+    let initial = add_recipe_missing_to_shopping(&mut store, &first, "2026-10-04").unwrap();
+    assert_eq!(initial[0].quantity, "0.25");
+    let combined =
+        add_recipes_missing_to_shopping(&mut store, &[first.clone(), second], "2026-10-04")
+            .unwrap();
+    assert_eq!(combined.len(), 1);
+    assert_eq!(combined[0].quantity, "0.5");
+    let smaller = add_recipe_missing_to_shopping(&mut store, &first, "2026-10-04").unwrap();
+    assert_eq!(smaller, combined);
+}
+
+#[test]
+fn invalid_combined_plan_leaves_persisted_shopping_unchanged() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("stock.sqlite");
+    let mut store = Store::open(&path).unwrap();
+    confirm_receipt(&mut store, review(parse_text(RECEIPT)).unwrap()).unwrap();
+    let saved = shopping_recipe("saved", "rice", "0.25", "lb");
+    add_recipe_missing_to_shopping(&mut store, &saved, "2026-10-04").unwrap();
+    let initial_shopping = snapshot(&store).unwrap().shopping;
+    assert_eq!(initial_shopping.len(), 1);
+    assert_eq!(initial_shopping[0].quantity, "0.25");
+    let before = export_backup(&store).unwrap().to_bytes().unwrap();
+    // A premature write of this valid first entry would increase saved rice to 0.5 lb.
+    let valid = shopping_recipe("valid", "rice", "0.5", "lb");
+    let invalid = shopping_recipe("invalid", "rice", "0", "lb");
+    assert!(add_recipes_missing_to_shopping(&mut store, &[valid, invalid], "2026-10-04").is_err());
+    assert!(add_recipes_missing_to_shopping(&mut store, &[], "2026-10-04").is_err());
+    drop(store);
+    let reopened = Store::open(&path).unwrap();
+    let persisted_shopping = snapshot(&reopened).unwrap().shopping;
+    assert_eq!(persisted_shopping.len(), 1);
+    assert_eq!(persisted_shopping[0].quantity, "0.25");
+    assert_eq!(
+        export_backup(&reopened).unwrap().to_bytes().unwrap(),
+        before
+    );
 }
 
 #[test]
