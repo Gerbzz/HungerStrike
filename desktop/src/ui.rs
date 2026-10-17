@@ -15,6 +15,16 @@ fn money(cents: i64) -> String {
     format!("{sign}${}.{:02}", absolute / 100, absolute % 100)
 }
 
+fn expiry_before_planning_date(expiry: Option<&str>, planning_date: &str) -> bool {
+    let Some(expiry) = expiry.and_then(|date| chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()) else {
+        return false;
+    };
+    let Ok(planning_date) = chrono::NaiveDate::parse_from_str(planning_date, "%Y-%m-%d") else {
+        return false;
+    };
+    expiry < planning_date
+}
+
 fn brand_texture(ctx: &egui::Context, name: &str, png: &[u8]) -> Option<egui::TextureHandle> {
     let decoded = image::load_from_memory(png).ok()?.into_rgba8();
     let size = [decoded.width() as usize, decoded.height() as usize];
@@ -555,6 +565,7 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
 fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Your kitchen");
     ui.label("Confirmed stock by storage zone.");
+    ui.label(format!("Planning date: {}", state.reference_date));
     let today = chrono::NaiveDate::parse_from_str(&state.reference_date, "%Y-%m-%d").ok();
     let stocked = state
         .snapshot
@@ -696,6 +707,13 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
                     .size(12.0)
                     .color(egui::Color32::from_rgb(82, 101, 102)),
                 );
+                if expiry_before_planning_date(lot.expiry_date.as_deref(), &state.reference_date) {
+                    ui.label(
+                        RichText::new("Past planning date · excluded from meal suggestions")
+                            .size(12.0)
+                            .color(egui::Color32::from_rgb(151, 77, 28)),
+                    );
+                }
             });
         if ui
             .interact(
@@ -791,6 +809,12 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
                     "Use by: {}",
                     lot.expiry_date.as_deref().unwrap_or("unknown")
                 ));
+                if expiry_before_planning_date(lot.expiry_date.as_deref(), &state.reference_date) {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(151, 77, 28),
+                        "Past planning date. This lot is excluded from meal suggestions.",
+                    );
+                }
             });
         ui.add_space(6.0);
         ui.strong("Manage confirmed stock");
@@ -1899,7 +1923,10 @@ fn data(ui: &mut egui::Ui, state: &mut AppState) {
 
 #[cfg(test)]
 mod tests {
-    use super::{effective_selected_meal, parse_budget_dollars, MealFilter, MealSuggestion};
+    use super::{
+        effective_selected_meal, expiry_before_planning_date, parse_budget_dollars, MealFilter,
+        MealSuggestion,
+    };
 
     #[test]
     fn default_and_explicit_meal_selection_use_visible_recipe() {
@@ -1936,6 +1963,15 @@ mod tests {
             Some("egg-and-spinach")
         );
         assert_eq!(selected(MealFilter::PlanNext, None), Some("tomato-pasta"));
+    }
+
+    #[test]
+    fn kitchen_expiry_cue_uses_the_same_planning_date_boundary() {
+        assert!(expiry_before_planning_date(Some("2026-10-03"), "2026-10-04"));
+        assert!(!expiry_before_planning_date(Some("2026-10-04"), "2026-10-04"));
+        assert!(!expiry_before_planning_date(None, "2026-10-04"));
+        assert!(!expiry_before_planning_date(Some("unknown"), "2026-10-04"));
+        assert!(!expiry_before_planning_date(Some("2026-10-03"), "bad date"));
     }
 
     #[test]
