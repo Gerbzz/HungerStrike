@@ -522,9 +522,12 @@ fn main() {
     let mut state = AppState::new(store, today).expect("read local inventory");
     if let Some(note) = recovery {
         state.message = format!(
-            "Your saved kitchen could not be read ({}), so a fresh one was started. The old file was kept at {}.",
+            "Your saved kitchen could not be read ({}), so a fresh one was started. The old file was kept, not deleted, as {} in the HungerStrike data folder.",
             note.reason,
-            note.preserved_copy.display()
+            note.preserved_copy
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default()
         );
     }
     state.hold_launch_for_capture = demo.as_deref() == Some("launch");

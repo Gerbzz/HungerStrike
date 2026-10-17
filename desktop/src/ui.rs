@@ -300,7 +300,12 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
         style.spacing.button_padding = egui::vec2(12.0, 7.0);
         style.visuals.panel_fill = egui::Color32::from_rgb(246, 248, 246);
         style.visuals.window_fill = egui::Color32::WHITE;
-        style.visuals.extreme_bg_color = egui::Color32::WHITE;
+        // Text fields sit on a faint tint with a visible outline so they read
+        // as editable on white cards.
+        style.visuals.extreme_bg_color = egui::Color32::from_rgb(244, 247, 246);
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0_f32, BORDER);
+        style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, ACCENT);
+        style.visuals.widgets.active.bg_stroke = egui::Stroke::new(1.5_f32, ACCENT);
         style.visuals.override_text_color = Some(egui::Color32::from_rgb(36, 52, 54));
         style.visuals.selection.bg_fill = egui::Color32::from_rgb(17, 110, 107);
         style.visuals.selection.stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
