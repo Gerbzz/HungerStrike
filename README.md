@@ -21,8 +21,13 @@
 
 HungerStrike scans grocery receipts on your own computer, lets you check and correct every line, keeps track of what is in the fridge, freezer and pantry, puts the food that needs using first at the top, suggests recipes from what you have, builds a shopping list for what you are missing, and shows what you spend on food. Everything is stored locally in SQLite.
 
-<p align="center"><img src="assets/screenshots/hungerstrike-kitchen-light-34405b7-1600x1100.png" alt="HungerStrike Kitchen from an earlier build (source 34405b7) with synthetic stock" width="860"></p>
-<p align="center"><sub><b>Earlier build.</b> This frame is from source <code>34405b7</code> and predates the receipt review, navigation and expiry changes described below. No screenshot of the current build exists yet; see <a href="#verification-status">Verification status</a>.</sub></p>
+<p align="center"><img src="assets/screenshots/hungerstrike-selected-7222c4b-1440x900.png" alt="HungerStrike Kitchen with synthetic stock, a selected lot, the expiry editor and the Use first list" width="860"></p>
+<p align="center"><sub>App-rendered frame from source <code>7222c4b</code> with synthetic test data. <a href="docs/CAPTURE_2026-10-17.md">All frames and their provenance</a>.</sub></p>
+
+<p align="center">
+  <img src="assets/screenshots/hungerstrike-receipt-photo-7222c4b-1440x900.png" alt="Receipt review draft produced by the bundled OCR from a synthetic labelled photo" width="420">
+  <img src="assets/screenshots/hungerstrike-plan-next-7222c4b-1440x900.png" alt="Meals Plan next view with ranked recipes and missing groceries" width="420">
+</p>
 
 ## What works today
 
@@ -80,9 +85,9 @@ For isolated, clearly labelled synthetic captures, set `HUNGERSTRIKE_CAPTURE_DEM
 
 See [verification.md](verification.md) for the dated record. In short, for this branch:
 
-- **Tested in hosted Windows CI:** `cargo fmt --check` and `cargo test --workspace` (core: receipts, ledger, budgets, backups, recipes, recovery, expiry; desktop: OCR on synthetic images, corrupt images, cancellation, timeout, per-line review gating, duplicate photo imports, app actions).
-- **Not verified:** the app has not been built or run on the development PC for this branch. Windows Smart App Control was still enforcing and blocked the Rust compiler from loading build-time libraries, so there are no new screenshots and no native mouse/keyboard test of the new receipt screen. Clippy was not run.
-- Earlier builds were rendered and inspected; those frames remain in `assets/screenshots/` and `docs/` with their own provenance records.
+- **Tests:** `cargo fmt --all --check` and `cargo test --workspace` pass locally (103 tests: 76 core, 27 desktop) and in hosted Windows CI. They cover receipts, ledger, budgets, backups, recipes, database recovery, expiry estimates, bundled OCR on synthetic images, corrupt images, cancellation, timeout, per-line review gating, duplicate photo imports and app actions.
+- **App-rendered frames:** the built app produced the [frames listed here](docs/CAPTURE_2026-10-17.md), including a real OCR draft from a synthetic photo, reopening a saved profile, and recovery from a corrupted database file.
+- **Not verified:** native mouse/keyboard click-through, the file dialog and 3D picking on this build (computer-use access to the app window was denied); `cargo clippy` for the desktop crate (Windows Smart App Control blocked a build-time library, see verification.md); real receipts; other PCs, GPUs and DPI settings; screen readers.
 
 ## Data and privacy
 
