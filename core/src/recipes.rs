@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use chrono::{Duration, NaiveDate};
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
@@ -302,19 +304,84 @@ pub fn add_recipe_missing_to_shopping(
     recipe: &Recipe,
     today: &str,
 ) -> Result<Vec<ShoppingItem>, String> {
-    let suggestion = suggest_meals(&snapshot(store)?, std::slice::from_ref(recipe), today)?
-        .pop()
-        .ok_or("recipe has no suggestion")?;
+    add_recipes_missing_to_shopping(store, std::slice::from_ref(recipe), today)
+}
+
+/// Save the combined shortage for these meals after allocating confirmed stock once.
+/// Repeating the same selection keeps the saved quantity rather than adding it again.
+pub fn add_recipes_missing_to_shopping(
+    store: &mut Store,
+    recipes: &[Recipe],
+    today: &str,
+) -> Result<Vec<ShoppingItem>, String> {
+    if recipes.is_empty() {
+        return Err("choose at least one recipe".into());
+    }
+    let today = NaiveDate::parse_from_str(today, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    let stock = snapshot(store)?;
+    // Group compatible recipe units before allocating stock, so the same lot is not
+    // counted as available independently for each meal.
+    let mut required: BTreeMap<(String, String), (String, String, Decimal, Decimal)> =
+        BTreeMap::new();
+    for recipe in recipes {
+        if recipe.ingredients.is_empty() {
+            return Err("recipe has no ingredients".into());
+        }
+        for ingredient in &recipe.ingredients {
+            let quantity = decimal(&ingredient.quantity)?;
+            if quantity <= Decimal::ZERO {
+                return Err("recipe quantity must be positive".into());
+            }
+            let (kind, scale) = unit_scale(&ingredient.unit);
+            let amount = quantity
+                .checked_mul(scale)
+                .ok_or("meal quantity overflow")?;
+            let entry = required
+                .entry((canonical_name(&ingredient.name), kind))
+                .or_insert_with(|| {
+                    (
+                        ingredient.name.clone(),
+                        ingredient.unit.clone(),
+                        Decimal::ZERO,
+                        scale,
+                    )
+                });
+            entry.2 = entry
+                .2
+                .checked_add(amount)
+                .ok_or("meal quantity overflow")?;
+        }
+    }
     let mut state = store.load()?;
-    for ingredient in suggestion.ingredients {
-        let missing = decimal(&ingredient.missing_quantity)?;
-        if missing <= Decimal::ZERO {
+    for ((name_key, unit_kind), (name, unit, required_base, unit_factor)) in required {
+        let mut available_base = Decimal::ZERO;
+        for lot in &stock.lots {
+            if !lot.category.starts_with("food.")
+                || canonical_name(&lot.name) != name_key
+                || unit_scale(&lot.unit).0 != unit_kind
+                || lot
+                    .expiry_date
+                    .as_deref()
+                    .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+                    .is_some_and(|date| date < today)
+            {
+                continue;
+            }
+            let quantity = decimal(&lot.quantity)?;
+            if quantity > Decimal::ZERO {
+                let (_, lot_factor) = unit_scale(&lot.unit);
+                available_base = available_base
+                    .checked_add(quantity.checked_mul(lot_factor).ok_or("stock overflow")?)
+                    .ok_or("stock overflow")?;
+            }
+        }
+        let missing_base = (required_base - available_base).max(Decimal::ZERO);
+        if missing_base <= Decimal::ZERO {
             continue;
         }
-        let (unit_kind, unit_factor) = unit_scale(&ingredient.unit);
+        let missing = missing_base / unit_factor;
         if let Some(existing) = state.shopping.iter_mut().find(|item| {
-            canonical_name(&item.name) == canonical_name(&ingredient.name)
-                && unit_scale(&item.unit).0 == unit_kind
+            canonical_name(&item.name) == name_key && unit_scale(&item.unit).0 == unit_kind
         }) {
             let (_, existing_factor) = unit_scale(&existing.unit);
             let existing_quantity = decimal(&existing.quantity)?;
@@ -324,9 +391,9 @@ pub fn add_recipe_missing_to_shopping(
                 .to_string();
         } else {
             state.shopping.push(ShoppingItem {
-                name: ingredient.name,
+                name,
                 quantity: missing.normalize().to_string(),
-                unit: ingredient.unit,
+                unit,
             });
         }
     }

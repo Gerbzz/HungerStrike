@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -64,10 +64,101 @@ pub struct Store {
     connection: Connection,
 }
 
+/// Describes a local database that could not be read and was set aside.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecoveryNote {
+    /// Where the unreadable file (and any journal) was moved. It is never
+    /// deleted, so it can be inspected or restored by hand.
+    pub preserved_copy: PathBuf,
+    pub reason: String,
+}
+
+fn looks_corrupt(error: &str) -> bool {
+    let error = error.to_ascii_lowercase();
+    [
+        "not a database",
+        "malformed",
+        "corrupt",
+        "file is encrypted",
+    ]
+    .iter()
+    .any(|marker| error.contains(marker))
+}
+
 impl Store {
     pub fn open(path: &Path) -> Result<Self, String> {
         let connection = Connection::open(path).map_err(|e| e.to_string())?;
         Self::initialize(connection)
+    }
+
+    /// Open the local database, recovering from a corrupt file.
+    ///
+    /// SQLite's rollback journal already makes each save atomic: an
+    /// interrupted write is rolled back on the next open. This handles the
+    /// remaining case where the file itself is unreadable (damaged bytes or an
+    /// unparseable payload). The damaged file and its journal are renamed
+    /// next to the original, never deleted, and a fresh store is created.
+    /// Lock/busy errors and data from a newer app version are returned as
+    /// errors instead, because setting those aside would hide good data.
+    pub fn open_or_recover(path: &Path) -> Result<(Self, Option<RecoveryNote>), String> {
+        let reason = match Self::open(path) {
+            Ok(store) => match store.load_payload() {
+                Ok(raw) => match serde_json::from_str::<State>(&raw) {
+                    Ok(state) if state.schema_version == 1 => return Ok((store, None)),
+                    Ok(state) => {
+                        return Err(format!(
+                            "unsupported local data version {}; use the newer HungerStrike build",
+                            state.schema_version
+                        ))
+                    }
+                    Err(error) => format!("saved data could not be read ({error})"),
+                },
+                Err(error) if looks_corrupt(&error) => error,
+                Err(error) => return Err(error),
+            },
+            Err(error) if looks_corrupt(&error) => error,
+            Err(error) => return Err(error),
+        };
+        let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+        let stem = path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or("inventory");
+        let mut preserved = path.with_file_name(format!("{stem}.unreadable-{stamp}.sqlite"));
+        let mut counter = 1;
+        while preserved.exists() {
+            preserved = path.with_file_name(format!("{stem}.unreadable-{stamp}-{counter}.sqlite"));
+            counter += 1;
+        }
+        std::fs::rename(path, &preserved)
+            .map_err(|e| format!("could not set aside unreadable data: {e}"))?;
+        for suffix in ["-journal", "-wal", "-shm"] {
+            let mut sidecar = path.as_os_str().to_owned();
+            sidecar.push(suffix);
+            let sidecar = PathBuf::from(sidecar);
+            if sidecar.exists() {
+                let mut target = preserved.as_os_str().to_owned();
+                target.push(suffix);
+                std::fs::rename(&sidecar, PathBuf::from(target))
+                    .map_err(|e| format!("could not set aside {suffix} file: {e}"))?;
+            }
+        }
+        let store = Self::open(path)?;
+        Ok((
+            store,
+            Some(RecoveryNote {
+                preserved_copy: preserved,
+                reason,
+            }),
+        ))
+    }
+
+    fn load_payload(&self) -> Result<String, String> {
+        self.connection
+            .query_row("SELECT payload FROM app_state WHERE id = 1", [], |row| {
+                row.get(0)
+            })
+            .map_err(|e| e.to_string())
     }
 
     pub fn open_in_memory() -> Result<Self, String> {

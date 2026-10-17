@@ -1,4 +1,5 @@
 mod ocr;
+mod review_hints;
 mod scene;
 mod ui;
 
@@ -6,14 +7,15 @@ use bevy::prelude::*;
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
 use hungerstrike_core::{
-    add_recipe_missing_to_shopping, apply_import, budget_view, confirm_receipt,
-    confirm_separate_purchase, cook_recipe, correct_receipt, export_backup,
-    matching_source_receipt, parse_text, preview_import, record_inventory_action,
-    remove_shopping_item, restore_last_import, review, set_budget, snapshot, AppSnapshot,
-    ImportPreview, InventoryAction, Period, ReceiptDraft, Recipe, RecipeCollection,
-    ReplaceOrReconcile, Store,
+    add_recipe_missing_to_shopping, add_recipes_missing_to_shopping, apply_import, budget_view,
+    confirm_receipt, confirm_separate_purchase, cook_recipe, correct_receipt, estimate_expiry,
+    export_backup, matching_source_receipt, parse_text, parse_user_date, preview_import,
+    record_inventory_action, remove_shopping_item, restore_last_import, review, set_budget,
+    snapshot, AppSnapshot, ImportPreview, InventoryAction, Period, ReceiptDraft, Recipe,
+    RecipeCollection, ReplaceOrReconcile, Store,
 };
 use std::{
+    collections::HashSet,
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -52,9 +54,15 @@ enum AppAction {
     Inventory(InventoryAction),
     CookRecipe(Recipe),
     AddMissingToShopping(Recipe),
-    RemoveShopping { name: String, unit: String },
+    AddMissingBatch(Vec<Recipe>),
+    RemoveShopping {
+        name: String,
+        unit: String,
+    },
     ParseReceipt,
     StartOcr(Vec<u8>),
+    /// Estimate expiry for one draft line (`Some(index)`) or all undated lines.
+    EstimateExpiry(Option<usize>),
     Commit(ReceiptCommit),
     CancelReceipt,
     PreviewBackup(Vec<u8>),
@@ -78,6 +86,9 @@ struct AppState {
     zone: String,
     lot_id: String,
     quantity: String,
+    expiry_text: String,
+    /// Set for the isolated synthetic capture routes; shows a persistent label.
+    synthetic_banner: bool,
     category: String,
     reference_date: String,
     week_start: u8,
@@ -95,6 +106,7 @@ struct AppState {
     show_about: bool,
     meal_filter: MealFilter,
     selected_recipe_id: Option<String>,
+    batch_recipe_ids: HashSet<String>,
     hold_launch_for_capture: bool,
     dormouse_logo: Option<bevy_egui::egui::TextureHandle>,
     pwds_logo: Option<bevy_egui::egui::TextureHandle>,
@@ -124,6 +136,8 @@ impl AppState {
             zone: "all".into(),
             lot_id: String::new(),
             quantity: "1".into(),
+            expiry_text: String::new(),
+            synthetic_banner: false,
             category: String::new(),
             reference_date: today,
             week_start: 0,
@@ -141,6 +155,7 @@ impl AppState {
             show_about: false,
             meal_filter: MealFilter::CookNow,
             selected_recipe_id: None,
+            batch_recipe_ids: HashSet::new(),
             hold_launch_for_capture: false,
             dormouse_logo: None,
             pwds_logo: None,
@@ -206,6 +221,45 @@ impl AppState {
         Ok(())
     }
 
+    /// Mark every purchase line in the draft as checked. The review screen
+    /// does this one line at a time; synthetic capture routes and tests call
+    /// it to stand in for the person doing the review.
+    fn mark_all_reviewed(&mut self) {
+        if let Some(draft) = self.draft.as_mut() {
+            for item in &mut draft.items {
+                item.reviewed = true;
+            }
+        }
+    }
+
+    /// Fill a clearly flagged expiry estimate for one draft line, or for every
+    /// food line that has no date yet. Never overwrites a date a person typed.
+    fn estimate_draft_expiry(&mut self, index: Option<usize>) -> Result<usize, String> {
+        let draft = self.draft.as_mut().ok_or("no receipt to review")?;
+        let purchase_date = draft
+            .purchase_date
+            .clone()
+            .filter(|date| parse_user_date(date).is_ok())
+            .ok_or("enter the purchase date first; estimates count from it")?;
+        let mut filled = 0;
+        for (at, item) in draft.items.iter_mut().enumerate() {
+            if index.is_some_and(|wanted| wanted != at) {
+                continue;
+            }
+            if index.is_none() && item.expiry_date.is_some() {
+                continue;
+            }
+            if let Some(estimate) =
+                estimate_expiry(&item.name, &item.category, None, &purchase_date)
+            {
+                item.expiry_date = Some(estimate.date);
+                item.expiry_estimated = true;
+                filled += 1;
+            }
+        }
+        Ok(filled)
+    }
+
     fn poll_ocr(&mut self) {
         if !self
             .ocr_task
@@ -219,7 +273,10 @@ impl AppState {
             Ok(Ok(text)) => {
                 self.message = self
                     .set_draft_from_text(text)
-                    .map(|_| "OCR is ready. Verify every field before confirmation.".into())
+                    .map(|_| {
+                        "OCR draft ready. Check every line against the photo before confirming."
+                            .into()
+                    })
                     .unwrap_or_else(|e| e);
             }
             Ok(Err(error)) => self.message = format!("{error}. Paste or type the receipt instead."),
@@ -250,6 +307,7 @@ impl AppState {
                     .find(|lot| lot.id == id)
                     .ok_or("stock lot not found")?;
                 self.zone = lot.zone.clone();
+                self.expiry_text = lot.expiry_date.clone().unwrap_or_default();
                 self.lot_id = id;
                 self.quantity = "1".into();
                 self.tab = Tab::Kitchen;
@@ -282,6 +340,24 @@ impl AppState {
                     recipe.name
                 );
             }
+            AppAction::AddMissingBatch(recipes) => {
+                let before = self.snapshot.shopping.clone();
+                let shopping = {
+                    let mut store = self.store.lock().map_err(|e| e.to_string())?;
+                    add_recipes_missing_to_shopping(&mut store, &recipes, &self.reference_date)?
+                };
+                self.refresh()?;
+                self.meal_filter = MealFilter::PlanNext;
+                self.selected_recipe_id = None;
+                self.message = if shopping == before {
+                    "Shopping list unchanged; any missing groceries are already listed.".into()
+                } else {
+                    format!(
+                        "Combined grocery needs for {} selected meals saved. Larger existing shopping quantities were retained.",
+                        recipes.len()
+                    )
+                };
+            }
             AppAction::RemoveShopping { name, unit } => {
                 {
                     let mut store = self.store.lock().map_err(|e| e.to_string())?;
@@ -302,17 +378,30 @@ impl AppState {
                 }
                 let cancel = Arc::new(AtomicBool::new(false));
                 let thread_cancel = cancel.clone();
-                let engine = ocr::installed_engine();
                 let handle = std::thread::spawn(move || {
-                    ocr::extract_local_image_with_cancel(&bytes, &engine, &thread_cancel)
+                    ocr::extract_local_image_with_cancel(&bytes, &thread_cancel)
                 });
                 self.ocr_task = Some(OcrTask { cancel, handle });
-                self.message = "Reading local image. You can cancel this operation.".into();
+                self.message = "Reading the photo on this computer. You can cancel.".into();
+            }
+            AppAction::EstimateExpiry(index) => {
+                let filled = self.estimate_draft_expiry(index)?;
+                self.message = if filled == 0 {
+                    "No estimate available; the expiry stays unknown until you enter it.".into()
+                } else {
+                    format!("Estimated expiry added to {filled} line(s). Estimates are labelled; check the package.")
+                };
             }
             AppAction::Commit(mode) => {
                 let draft = self.draft.clone().ok_or("no receipt to confirm")?;
                 if matches!(mode, ReceiptCommit::Separate) && !self.separate_ack {
                     return Err("acknowledge that this is a separate purchase first".into());
+                }
+                let unchecked = draft.items.iter().filter(|item| !item.reviewed).count();
+                if unchecked > 0 {
+                    return Err(format!(
+                        "check every line before confirming ({unchecked} not checked yet)"
+                    ));
                 }
                 let reviewed = review(draft).map_err(|e| e.to_string())?;
                 let outcome = {
@@ -382,6 +471,7 @@ fn seed_unknown_visual_capture(state: &mut AppState) -> Result<(), String> {
         // synthetic line before the demo writes inventory.
         item.uncertainty.retain(|flag| flag != "item unrecognized");
     }
+    state.mark_all_reviewed();
     state.dispatch(AppAction::Commit(ReceiptCommit::New))?;
     let juice_id = state
         .snapshot
@@ -412,7 +502,17 @@ fn data_path() -> PathBuf {
 fn main() {
     let path = data_path();
     std::fs::create_dir_all(path.parent().expect("data folder")).expect("create local data folder");
-    let store = Store::open(&path).expect("open local inventory");
+    let (store, recovery) = match Store::open_or_recover(&path) {
+        Ok(opened) => opened,
+        Err(error) => {
+            rfd::MessageDialog::new()
+                .set_level(rfd::MessageLevel::Error)
+                .set_title("HungerStrike could not open local data")
+                .set_description(format!("{error}\n\nData folder: {}", path.display()))
+                .show();
+            std::process::exit(1);
+        }
+    };
     let demo = std::env::var("HUNGERSTRIKE_CAPTURE_DEMO").ok();
     let today = if demo.is_some() {
         "2026-10-04".into()
@@ -420,8 +520,27 @@ fn main() {
         chrono::Local::now().date_naive().to_string()
     };
     let mut state = AppState::new(store, today).expect("read local inventory");
+    if let Some(note) = recovery {
+        state.message = format!(
+            "Your saved kitchen could not be read ({}), so a fresh one was started. The old file was kept at {}.",
+            note.reason,
+            note.preserved_copy.display()
+        );
+    }
     state.hold_launch_for_capture = demo.as_deref() == Some("launch");
-    if demo.as_deref() == Some("receipt") {
+    state.synthetic_banner = demo.is_some();
+    if demo.as_deref() == Some("receipt-photo") {
+        // Runs the bundled OCR on the SYNTHETIC labelled photo fixture; the
+        // draft is shown for review and nothing is written.
+        state
+            .dispatch(AppAction::StartOcr(
+                include_bytes!("../../tests/images/synthetic-receipt-photo.jpg").to_vec(),
+            ))
+            .expect("start synthetic OCR");
+        state
+            .dispatch(AppAction::Navigate(Tab::Receipt))
+            .expect("show receipt");
+    } else if demo.as_deref() == Some("receipt") {
         state.raw_text =
             include_str!("../../core/tests/fixtures/receipts/R001-purchase.txt").into();
         state
@@ -462,8 +581,14 @@ fn main() {
                 if item.name == "milk 2%" {
                     item.expiry_date = Some("2026-10-07".into());
                 }
+                if item.name == "large eggs" {
+                    // Synthetic opt-in estimate so captures show the label.
+                    item.expiry_date = Some("2026-10-24".into());
+                    item.expiry_estimated = true;
+                }
             }
         }
+        state.mark_all_reviewed();
         state
             .dispatch(AppAction::Commit(ReceiptCommit::New))
             .expect("seed synthetic stock");
@@ -471,6 +596,7 @@ fn main() {
         state
             .dispatch(AppAction::ParseReceipt)
             .expect("parse synthetic second receipt");
+        state.mark_all_reviewed();
         state
             .dispatch(AppAction::Commit(ReceiptCommit::New))
             .expect("seed synthetic spending");
@@ -579,6 +705,11 @@ fn main() {
                     primary_window: Some(Window {
                         title: "HungerStrike · local kitchen".into(),
                         resolution: resolution.into(),
+                        resize_constraints: bevy::window::WindowResizeConstraints {
+                            min_width: 1000.0,
+                            min_height: 680.0,
+                            ..default()
+                        },
                         ..default()
                     }),
                     ..default()
@@ -608,8 +739,19 @@ fn draw_ui(mut contexts: EguiContexts, mut state: ResMut<AppState>) -> Result {
     Ok(())
 }
 
-fn capture_once(mut commands: Commands, time: Res<Time>, mut captured: Local<bool>) {
-    if *captured || time.elapsed_secs() < 2.0 {
+fn capture_once(
+    mut commands: Commands,
+    time: Res<Time>,
+    state: Res<AppState>,
+    mut captured: Local<bool>,
+) {
+    let delay = std::env::var("HUNGERSTRIKE_CAPTURE_DELAY")
+        .ok()
+        .and_then(|secs| secs.parse::<f32>().ok())
+        .unwrap_or(2.0)
+        .clamp(1.0, 60.0);
+    // Wait for any OCR job so a receipt-photo capture shows the real draft.
+    if *captured || time.elapsed_secs() < delay || state.ocr_task.is_some() {
         return;
     }
     if let Some(path) = std::env::var_os("HUNGERSTRIKE_CAPTURE_PATH") {
@@ -623,6 +765,7 @@ fn capture_once(mut commands: Commands, time: Res<Time>, mut captured: Local<boo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hungerstrike_core::DraftItem;
 
     const RECEIPT: &str = include_str!("../../core/tests/fixtures/receipts/R001-purchase.txt");
 
@@ -684,6 +827,7 @@ mod tests {
         state.raw_text = RECEIPT.into();
         state.dispatch(AppAction::ParseReceipt).unwrap();
         assert_eq!(state.snapshot.receipt_count, 0);
+        state.mark_all_reviewed();
         state
             .dispatch(AppAction::Commit(ReceiptCommit::New))
             .unwrap();
@@ -756,6 +900,7 @@ mod tests {
         assert_eq!(state.snapshot.receipt_count, 0);
         state.raw_text = RECEIPT.into();
         state.dispatch(AppAction::ParseReceipt).unwrap();
+        state.mark_all_reviewed();
         state
             .dispatch(AppAction::Commit(ReceiptCommit::New))
             .unwrap();
@@ -763,6 +908,7 @@ mod tests {
         state.raw_text = RECEIPT.into();
         state.dispatch(AppAction::ParseReceipt).unwrap();
         assert!(state.source_match.is_some());
+        state.mark_all_reviewed();
         state
             .dispatch(AppAction::Commit(ReceiptCommit::New))
             .unwrap();
@@ -775,6 +921,7 @@ mod tests {
             AppState::new(Store::open_in_memory().unwrap(), "2026-10-03".into()).unwrap();
         state.raw_text = RECEIPT.into();
         state.dispatch(AppAction::ParseReceipt).unwrap();
+        state.mark_all_reviewed();
         state
             .dispatch(AppAction::Commit(ReceiptCommit::New))
             .unwrap();
@@ -786,11 +933,13 @@ mod tests {
         for (index, item) in draft.items.iter_mut().enumerate() {
             item.line_id = format!("R001-SECOND-L{:02}", index + 1);
         }
+        state.mark_all_reviewed();
         assert!(state
             .dispatch(AppAction::Commit(ReceiptCommit::Separate))
             .is_err());
         assert_eq!(state.snapshot.receipt_count, 1);
         state.separate_ack = true;
+        state.mark_all_reviewed();
         state
             .dispatch(AppAction::Commit(ReceiptCommit::Separate))
             .unwrap();
@@ -807,6 +956,7 @@ mod tests {
             AppState::new(Store::open_in_memory().unwrap(), "2026-10-03".into()).unwrap();
         source.raw_text = RECEIPT.into();
         source.dispatch(AppAction::ParseReceipt).unwrap();
+        source.mark_all_reviewed();
         source
             .dispatch(AppAction::Commit(ReceiptCommit::New))
             .unwrap();
@@ -827,140 +977,208 @@ mod tests {
         assert_eq!(target.snapshot.receipt_count, 0);
     }
 
-    #[cfg(windows)]
+    fn load_photo(state: &mut AppState, bytes: &[u8]) {
+        state.dispatch(AppAction::StartOcr(bytes.to_vec())).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        while state.ocr_task.is_some() {
+            state.poll_ocr();
+            assert!(
+                std::time::Instant::now() < deadline,
+                "OCR worker did not finish"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    /// What a person does on the review screen for the SYNTHETIC R101 photo:
+    /// correct each line against the image and tick it as checked.
+    fn correct_r101_draft(state: &mut AppState) {
+        let draft = state.draft.as_mut().expect("OCR draft");
+        draft.id = "R101".into();
+        draft.purchase_date = Some("2026-10-12".into());
+        let lines = [
+            ("bananas", "1.25", "lb", 86, "food.produce"),
+            ("milk 2%", "1", "gal", 429, "food.dairy"),
+            ("large eggs", "12", "egg", 349, "food.dairy"),
+            ("spinach", "5", "oz", 299, "food.produce"),
+            ("rice", "2", "lb", 379, "food.pantry"),
+        ];
+        draft.items = lines
+            .iter()
+            .enumerate()
+            .map(
+                |(index, (name, quantity, unit, cents, category))| DraftItem {
+                    line_id: format!("R101-L{:02}", index + 1),
+                    raw: String::new(),
+                    name: (*name).into(),
+                    quantity: Some((*quantity).into()),
+                    unit: Some((*unit).into()),
+                    gross_cents: Some(*cents),
+                    discount_cents: 0,
+                    net_cents: Some(*cents),
+                    category: (*category).into(),
+                    expiry_date: None,
+                    expiry_estimated: false,
+                    uncertainty: Vec::new(),
+                    reviewed: false,
+                },
+            )
+            .collect();
+        draft.refunds.clear();
+        draft.unallocated_adjustments.clear();
+        draft.known_subtotal_cents = 1542;
+        draft.printed_subtotal_cents = Some(1542);
+        draft.printed_tax_cents = Some(0);
+        draft.printed_total_cents = Some(1542);
+        draft.uncertainty.clear();
+    }
+
     #[test]
-    fn actual_image_ocr_requires_review_and_duplicate_photo_does_not_double_spend() {
-        if !ocr::installed_engine().is_file() {
-            eprintln!("local image acceptance skipped: English Tesseract is not installed");
-            return;
-        }
-        fn load_photo(state: &mut AppState, bytes: &[u8]) {
-            state.dispatch(AppAction::StartOcr(bytes.to_vec())).unwrap();
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-            while state.ocr_task.is_some() {
-                state.poll_ocr();
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "OCR worker did not finish"
-                );
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
-        }
-        let clean = include_bytes!("../../tests/images/synthetic-clean.png");
+    fn bundled_ocr_draft_needs_line_review_and_repeat_photo_is_held_as_duplicate() {
+        let photo = include_bytes!("../../tests/images/synthetic-receipt-clean.png");
         let mut state =
-            AppState::new(Store::open_in_memory().unwrap(), "2026-10-03".into()).unwrap();
-        load_photo(&mut state, clean);
-        let draft = state.draft.as_ref().expect("clean OCR returns review text");
-        assert_eq!(draft.items.len(), 6);
-        assert_eq!(
-            (
-                draft.printed_subtotal_cents,
-                draft.printed_tax_cents,
-                draft.printed_total_cents
-            ),
-            (Some(1741), Some(28), Some(1769))
-        );
-        assert_eq!(
-            draft
-                .items
-                .iter()
-                .find(|item| item.name == "pasta")
-                .unwrap()
-                .quantity
-                .as_deref(),
-            Some("2")
-        );
+            AppState::new(Store::open_in_memory().unwrap(), "2026-10-12".into()).unwrap();
+        load_photo(&mut state, photo);
+        let draft = state.draft.clone().expect("bundled OCR returns a draft");
         assert!(
-            review(draft.clone()).is_err(),
-            "uncertain OCR fields must require correction"
+            draft.items.iter().all(|item| item.expiry_date.is_none()),
+            "a receipt never provides expiry dates"
         );
         assert!(state
             .dispatch(AppAction::Commit(ReceiptCommit::New))
             .is_err());
         assert_eq!(state.snapshot.receipt_count, 0);
 
-        fn repair_clean_draft(state: &mut AppState) {
-            let draft = state.draft.as_mut().unwrap();
-            draft.id = "IMAGE-R001".into();
-            draft.purchase_date = Some("2026-10-03".into());
-            for (index, item) in draft.items.iter_mut().enumerate() {
-                item.line_id = format!("IMAGE-R001-L{:02}", index + 1);
-            }
-            let soap = draft
-                .items
-                .iter_mut()
-                .find(|item| item.name == "dish soap")
-                .unwrap();
-            soap.quantity = Some("1".into());
-            soap.unit = Some("bottle".into());
-            assert!(
-                review(draft.clone()).is_ok(),
-                "corrected synthetic photo must reconcile"
-            );
+        correct_r101_draft(&mut state);
+        assert!(review(state.draft.clone().unwrap()).is_ok());
+        // Totals reconcile, but nothing is saved until every line is checked.
+        let error = state
+            .dispatch(AppAction::Commit(ReceiptCommit::New))
+            .unwrap_err();
+        assert!(error.contains("check every line"), "{error}");
+        assert_eq!(state.snapshot.receipt_count, 0);
+        for index in 0..4 {
+            state.draft.as_mut().unwrap().items[index].reviewed = true;
         }
-        repair_clean_draft(&mut state);
+        assert!(state
+            .dispatch(AppAction::Commit(ReceiptCommit::New))
+            .unwrap_err()
+            .contains("1 not checked"));
+
+        // Estimated expiry is opt-in, labelled and dated from purchase.
+        state.dispatch(AppAction::EstimateExpiry(Some(1))).unwrap();
+        let milk = &state.draft.as_ref().unwrap().items[1];
+        assert_eq!(milk.expiry_date.as_deref(), Some("2026-10-19"));
+        assert!(milk.expiry_estimated);
+        assert!(state.draft.as_ref().unwrap().items[0].expiry_date.is_none());
+
+        state.draft.as_mut().unwrap().items[4].reviewed = true;
         state
             .dispatch(AppAction::Commit(ReceiptCommit::New))
             .unwrap();
         assert_eq!(
             (state.snapshot.receipt_count, state.snapshot.cash_flow_cents),
-            (1, 1769)
+            (1, 1542)
         );
-        load_photo(&mut state, &clean.to_vec());
+        let milk = state
+            .snapshot
+            .lots
+            .iter()
+            .find(|lot| lot.name == "milk 2%")
+            .unwrap();
+        assert!(milk.expiry_estimated);
+
+        // Importing the same photo again is recognised and does not double-spend.
+        load_photo(&mut state, photo);
         assert!(state.source_match.is_some());
-        repair_clean_draft(&mut state);
+        correct_r101_draft(&mut state);
+        state.mark_all_reviewed();
         state
             .dispatch(AppAction::Commit(ReceiptCommit::New))
             .unwrap();
         assert_eq!(state.message, "Receipt: Duplicate");
         assert_eq!(
             (state.snapshot.receipt_count, state.snapshot.cash_flow_cents),
-            (1, 1769)
+            (1, 1542)
         );
+    }
 
-        for (name, bytes) in [
-            (
-                "blurred",
-                include_bytes!("../../tests/images/synthetic-blurred.png").as_slice(),
-            ),
-            (
-                "tilted",
-                include_bytes!("../../tests/images/synthetic-tilted.png").as_slice(),
-            ),
-            (
-                "cropped",
-                include_bytes!("../../tests/images/synthetic-cropped.png").as_slice(),
-            ),
-        ] {
-            let mut scratch =
-                AppState::new(Store::open_in_memory().unwrap(), "2026-10-03".into()).unwrap();
-            load_photo(&mut scratch, bytes);
-            if let Some(draft) = scratch.draft.clone() {
-                assert!(
-                    review(draft).is_err(),
-                    "{name} OCR damage must stay unresolved"
-                );
-                assert!(scratch
-                    .dispatch(AppAction::Commit(ReceiptCommit::New))
-                    .is_err());
-            }
-            assert_eq!(
-                scratch.snapshot.receipt_count, 0,
-                "{name} must not write stock"
-            );
-            assert_eq!(
-                scratch.snapshot.cash_flow_cents, 0,
-                "{name} must not write spending"
-            );
-        }
-        let mut cancelled =
-            AppState::new(Store::open_in_memory().unwrap(), "2026-10-03".into()).unwrap();
-        cancelled
-            .dispatch(AppAction::StartOcr(clean.to_vec()))
+    #[test]
+    fn corrupt_photo_and_cancelled_ocr_never_write() {
+        let mut state =
+            AppState::new(Store::open_in_memory().unwrap(), "2026-10-12".into()).unwrap();
+        load_photo(
+            &mut state,
+            include_bytes!("../../tests/images/synthetic-receipt-truncated.png"),
+        );
+        assert!(state.draft.is_none());
+        assert!(state.message.contains("not a readable PNG or JPEG"));
+        assert_eq!(state.snapshot.receipt_count, 0);
+
+        state
+            .dispatch(AppAction::StartOcr(
+                include_bytes!("../../tests/images/synthetic-receipt-photo.jpg").to_vec(),
+            ))
             .unwrap();
-        cancelled.dispatch(AppAction::CancelReceipt).unwrap();
-        assert!(cancelled.ocr_task.is_none());
-        assert!(cancelled.draft.is_none());
-        assert_eq!(cancelled.snapshot.receipt_count, 0);
+        assert!(
+            state.dispatch(AppAction::StartOcr(Vec::new())).is_err(),
+            "only one OCR job at a time"
+        );
+        state.dispatch(AppAction::CancelReceipt).unwrap();
+        assert!(state.ocr_task.is_none());
+        assert!(state.draft.is_none());
+        assert_eq!(state.snapshot.receipt_count, 0);
+    }
+
+    #[test]
+    fn batch_feedback_distinguishes_unchanged_and_retained_quantities() {
+        let mut store = Store::open_in_memory().unwrap();
+        confirm_receipt(&mut store, review(parse_text(RECEIPT)).unwrap()).unwrap();
+        let mut state = AppState::new(store, "2026-10-04".into()).unwrap();
+        let banana_meal = |id: &str, quantity: &str| Recipe {
+            id: id.into(),
+            name: id.into(),
+            servings: 1,
+            ingredients: vec![hungerstrike_core::RecipeIngredient {
+                name: "banana".into(),
+                quantity: quantity.into(),
+                unit: "lb".into(),
+            }],
+            steps: vec!["Slice the banana.".into()],
+        };
+
+        state
+            .dispatch(AppAction::AddMissingBatch(vec![banana_meal(
+                "covered", "0.25",
+            )]))
+            .unwrap();
+        assert!(state.snapshot.shopping.is_empty());
+        assert_eq!(
+            state.message,
+            "Shopping list unchanged; any missing groceries are already listed."
+        );
+        assert!(state.meal_filter == MealFilter::PlanNext);
+
+        state
+            .dispatch(AppAction::AddMissingBatch(vec![banana_meal(
+                "larger", "1.5",
+            )]))
+            .unwrap();
+        assert_eq!(state.snapshot.shopping[0].quantity, "0.25");
+        assert!(state.message.contains("saved"));
+        assert!(state
+            .message
+            .contains("Larger existing shopping quantities"));
+
+        state
+            .dispatch(AppAction::AddMissingBatch(vec![banana_meal(
+                "smaller", "1.4",
+            )]))
+            .unwrap();
+        assert_eq!(state.snapshot.shopping[0].quantity, "0.25");
+        assert_eq!(
+            state.message,
+            "Shopping list unchanged; any missing groceries are already listed."
+        );
     }
 }

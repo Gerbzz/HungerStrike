@@ -1,3 +1,22 @@
 [workspace]
 members = ["core", "desktop"]
 resolver = "2"
+
+# The bundled OCR engine is unusably slow without optimisation. Optimise just
+# the OCR crates in debug/test builds so `cargo test` stays practical.
+[profile.dev.package.ocrs]
+opt-level = 3
+[profile.dev.package.rten]
+opt-level = 3
+[profile.dev.package.rten-base]
+opt-level = 3
+[profile.dev.package.rten-gemm]
+opt-level = 3
+[profile.dev.package.rten-imageproc]
+opt-level = 3
+[profile.dev.package.rten-simd]
+opt-level = 3
+[profile.dev.package.rten-tensor]
+opt-level = 3
+[profile.dev.package.rten-vecmath]
+opt-level = 3
