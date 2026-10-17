@@ -19,7 +19,15 @@ pub struct DraftItem {
     pub net_cents: Option<i64>,
     pub category: String,
     pub expiry_date: Option<String>,
+    /// True when `expiry_date` came from HungerStrike's rough shelf-life
+    /// estimate rather than a date a person read from the package. Receipts
+    /// never print expiry dates, so an OCR draft always starts with `None`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub expiry_estimated: bool,
     pub uncertainty: Vec<String>,
+    /// Review-session flag: a person has checked this line. Never persisted.
+    #[serde(skip)]
+    pub reviewed: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -83,9 +91,26 @@ pub enum ConfirmOutcome {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum InventoryAction {
-    Consume { lot_id: String, quantity: String },
-    Discard { lot_id: String, quantity: String },
-    Move { lot_id: String, zone: String },
+    Consume {
+        lot_id: String,
+        quantity: String,
+    },
+    Discard {
+        lot_id: String,
+        quantity: String,
+    },
+    Move {
+        lot_id: String,
+        zone: String,
+    },
+    /// Set, correct or clear a lot's expiry date. `estimated` records whether
+    /// the date is a HungerStrike estimate or one a person entered.
+    SetExpiry {
+        lot_id: String,
+        expiry_date: Option<String>,
+        #[serde(default)]
+        estimated: bool,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -101,6 +126,9 @@ pub struct LotView {
     pub cost_unknown: bool,
     pub zone: String,
     pub expiry_date: Option<String>,
+    /// See [`DraftItem::expiry_estimated`].
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub expiry_estimated: bool,
     pub purchase_date: String,
 }
 
