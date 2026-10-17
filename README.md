@@ -1,77 +1,102 @@
 <p align="center">
-  <img src="assets/branding/HungerStrike.png" alt="Original HungerStrike dormouse and pear logo" width="160" height="160">
+  <img src="assets/branding/HungerStrike.png" alt="Original HungerStrike dormouse and pear logo" width="128" height="128">
 </p>
 
 <h1 align="center">HungerStrike</h1>
 
+<p align="center"><strong>A free, local-first kitchen assistant: from the receipt to the fridge to dinner.</strong></p>
+
 <p align="center">
-  <a href="https://prowebdevsolutions.com"><picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/PWDS-logo-orange.svg">
-    <img src="assets/branding/PWDS-logo.png" alt="PWDS company logo" width="120">
-  </picture></a>
+  <code>100% Rust</code> · <code>Windows source preview (alpha)</code> · <code>offline · no account · no paid API</code>
 </p>
 
-<p align="center"><strong>Know what is in the kitchen, from the receipt onward.</strong></p>
+<p align="center">
+  <a href="#what-works-today">What works</a> ·
+  <a href="#how-receipt-scanning-works">Receipt scanning</a> ·
+  <a href="#implemented-vs-planned">Implemented vs planned</a> ·
+  <a href="#build-and-run">Build and run</a> ·
+  <a href="#verification-status">Verification</a> ·
+  <a href="#credits-and-licenses">Credits</a>
+</p>
 
-HungerStrike brings reviewed purchases, local stock, meal ideas, and spending into one Windows desktop workspace. Every receipt stays a draft until you confirm what it says.
+HungerStrike scans grocery receipts on your own computer, lets you check and correct every line, keeps track of what is in the fridge, freezer and pantry, puts the food that needs using first at the top, suggests recipes from what you have, builds a shopping list for what you are missing, and shows what you spend on food. Everything is stored locally in SQLite.
 
-<p align="center"><img src="assets/screenshots/hungerstrike-kitchen-light-34405b7-1600x1100.png" alt="Light HungerStrike Kitchen at source 34405b7 with synthetic stock and selected-item actions" width="900"></p>
+<p align="center"><img src="assets/screenshots/hungerstrike-kitchen-light-34405b7-1600x1100.png" alt="HungerStrike Kitchen from an earlier build (source 34405b7) with synthetic stock" width="860"></p>
+<p align="center"><sub><b>Earlier build.</b> This frame is from source <code>34405b7</code> and predates the receipt review, navigation and expiry changes described below. No screenshot of the current build exists yet; see <a href="#verification-status">Verification status</a>.</sub></p>
 
-The [Kitchen](assets/screenshots/hungerstrike-kitchen-light-34405b7-1600x1100.png), [1280 × 720 Kitchen](assets/screenshots/hungerstrike-kitchen-light-34405b7-1280x720.png), [Cook now](assets/screenshots/hungerstrike-meals-light-34405b7-1600x900.png), [Plan next](assets/screenshots/hungerstrike-plan-next-light-34405b7-1600x900.png), [saved shopping list](assets/screenshots/hungerstrike-shopping-light-34405b7-1600x900.png), [post-Cook stock](assets/screenshots/hungerstrike-cooked-light-34405b7-1600x900.png), and [launch](assets/screenshots/hungerstrike-launch-light-34405b7-1600x900.png) are genuine app-rendered frames from the `34405b7` executable. The corrected [About](assets/screenshots/hungerstrike-about-light-2c122bf-1600x900.png) and [1280 x 720 About](assets/screenshots/hungerstrike-about-light-2c122bf-1280x720.png) frames come from the newer `2c122bf` executable. See [capture provenance and limits](docs/CURRENT_CAPTURE_PROVENANCE.md). Earlier [light frames](docs/LIGHT_SCREENSHOT_PROVENANCE.md) and the [dark public-version image](docs/SCREENSHOT_PROVENANCE.md) remain preserved as historical evidence.
+## What works today
 
-<p align="center"><a href="docs/workflow.md">Walk through the app</a> · <a href="docs/launch.md">Build and launch</a> · <a href="verification.md">Verification and limits</a> · <a href="assets/branding">Original artwork</a></p>
+| Area | What you can do |
+| --- | --- |
+| **Receipts** | Scan a PNG/JPEG receipt photo with the bundled offline OCR engine, or paste receipt text. The draft shows each line with the text the scanner read, and editable name, quantity, unit, category, price and discount. Plain-language hints say which field or total does not reconcile. **Nothing is saved until every line is ticked as checked** and the subtotal, tax and total reconcile. Duplicate receipts are recognised and never charged twice. Corrections and refunds are audited. |
+| **Expiry** | Receipts do not print expiry dates, so a scanned line never gets one. You can type the package date, or ask for a rough **estimate**, which is saved as an estimate and labelled "(estimate)" everywhere until you replace it. |
+| **Kitchen** | A 3D virtual kitchen (fridge, freezer, pantry) and a matching stock list. Select an item to consume, discard, move it between zones, or set, estimate or clear its expiry. Stock is sorted soonest-expiry first, and a **Use first** list links to anything dated within three days. |
+| **Meals** | Ten bundled original recipes. *Cook now* uses stock you have; *Use soon* prefers recipes that use dated stock; *Plan next* ranks recipes by how few ingredients are missing. Cooking previews the exact lots before stock changes. Missing ingredients for one or several selected meals can be added to a combined local shopping list. |
+| **Spending** | Cash paid, food vs household allocations, refunds, consumed and discarded food cost, with weekly and monthly budgets. |
+| **Data** | Export a JSON backup, preview an import, replace or reconcile, and undo the last replacement. If the local database is ever unreadable it is renamed aside (never deleted) and a fresh one is started, with a message saying where the old file is. |
 
-## From a receipt to a useful kitchen
+## How receipt scanning works
 
-### Review before stock changes
+1. **Scan receipt photo…** opens a file picker. The image is checked (PNG/JPEG, at most 8 MB and 40 megapixels) and decoded on a worker thread; a corrupt or truncated file is rejected before any draft exists.
+2. The [ocrs](https://github.com/robertknight/ocrs) engine finds and reads text lines using two small models that are compiled into the executable. Lines are rebuilt into receipt rows (item name on the left joined with the price on the right, with slight tilt corrected) and handed to the receipt parser.
+3. You review the draft. **Cancel scan** stops a running job; **Discard draft** clears it. Photo bytes and OCR text are never written to the database or backups.
 
-Paste receipt text or open a local photo for optional offline OCR. Check the parsed lines, quantities, prices, categories, date, and totals before confirming. Duplicate detection, explicit separate-purchase acknowledgment, and correction guards help preserve the spending and inventory history.
+OCR quality depends on the photo. The bundled engine reads the repository's labelled synthetic receipts (see `tests/images/`), but real receipts with faded thermal paper, unusual fonts or heavy creasing will need more correction, which is why the line-by-line review is mandatory. No real receipt has been tested.
 
-### See what is available
+## Implemented vs planned
 
-Browse the fridge, freezer, and pantry in the 3D scene or the matching stock list. Keep quantities and known costs tied to confirmed purchases, while unknown expiry dates and prices stay visibly unknown. Linked refunds can reverse stock from the original lot.
+| Feature | Status |
+| --- | --- |
+| Local receipt OCR (bundled, offline) | Implemented; tested in CI on synthetic images only |
+| Paste/typed receipt entry | Implemented |
+| Mandatory per-line review before saving | Implemented |
+| Labelled, opt-in expiry estimates; editable expiry on stock | Implemented |
+| Inventory by zone, consume/discard/move | Implemented |
+| Use-first prioritisation | Implemented (3-day window, sorted lists) |
+| Recipe suggestions and combined shopping list | Implemented (bundled recipes only) |
+| Spending and budgets | Implemented |
+| Backup, restore, undo; corrupt-database recovery | Implemented |
+| Virtual 3D kitchen | Implemented as an illustrative kitchen; it does not reconstruct a real kitchen from photos |
+| Camera capture | Planned (file import only today) |
+| Android | Planned. A stale [android-preview branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has a Bevy NativeActivity build that was run on an emulator in October; it is not merged and no Android support is claimed. The bundled OCR is pure Rust, so it does not block an Android port the way an external Tesseract did. |
+| iOS, macOS, Linux | Not built or tested |
+| Installer / signed release | Not available |
 
-### Plan meals from confirmed stock
+## Build and run
 
-Ten original recipes are bundled locally, including pantry staples such as rice, canned beans, and oats. Cook now uses sufficient confirmed stock; Use soon prioritizes recipes using dated stock; Plan next ranks missing-grocery ideas by the number of missing ingredients and then by how much of their required quantities are on hand. It shows missing quantities and saves selected needs to a local shopping list. Select several meals together to total shared ingredients before subtracting stock once. The selected recipe previews the exact lots before an explicit Cook action updates inventory. Recorded stock costs and known budgets are shown, while missing-grocery prices remain unknown. [Recommendation method and limits](docs/PANTRY_RECOMMENDATIONS_2026-10-16.md).
-
-<p align="center"><img src="assets/screenshots/hungerstrike-plan-next-66f5dca-1600x900.png" alt="Native Plan next view from the 66f5dca source preview with synthetic pantry stock, ranked meal ideas, missing grocery quantities, and the selected recipe details" width="900"></p>
-
-The [current Plan next view](assets/screenshots/hungerstrike-plan-next-66f5dca-1600x900.png) and [1280 x 720 view](assets/screenshots/hungerstrike-plan-next-66f5dca-1280x720.png) are app-rendered synthetic frames from the `66f5dca` source. See the [native capture record](docs/PANTRY_NATIVE_PREVIEW_2026-10-16.md) for hashes and review limits.
-
-### Keep spending and stock use distinct
-
-The spending view separates receipt cash flow, food and household allocations, refunds, consumed food, and discarded food. Weekly and monthly budgets use those reviewed figures without counting stock use as another purchase.
-
-## Run the Windows source preview
-
-You need a local Rust toolchain and Cargo. From the repository root:
+You need a stable Rust toolchain on Windows. From the repository root:
 
 ```powershell
 cargo build --release -p hungerstrike-rust-desktop
 .\target\release\hungerstrike-rust-desktop.exe
-```
-
-There is no installer or binary in this repository. Paste or type receipts without any OCR dependency. Photo OCR optionally uses a separately installed local English Tesseract at `C:\Program Files\Tesseract-OCR\tesseract.exe`; the engine and language model are not bundled. See [launch notes](docs/launch.md) for the input limits and local data path.
-
-To run the repository tests:
-
-```powershell
 cargo test --workspace
 ```
 
-## Status and data
+The OCR crates are optimised even in debug builds (see `[profile.dev.package.*]` in `Cargo.toml`) so the tests run in seconds. Data lives at `%LOCALAPPDATA%\HungerStrike\inventory.sqlite`; set `HUNGERSTRIKE_DATA_DIR` to use a separate profile. See [launch notes](docs/launch.md) and the [workflow walkthrough](docs/workflow.md).
 
-This is a **Windows alpha source preview**. The [light-interface recovery record](docs/verification/LIGHT_UI_SOURCE_RECOVERY.md) tracks its source. The pantry recommendation source at `66f5dca` passed 79 hosted Windows workspace tests (61 core, 18 desktop), and its debug executable produced the two native Plan next frames above. Earlier source `2c122bf` built as a guarded desktop release; the later recipe date-ordering and freshness-cue changes have not received a new release capture. Native mouse and keyboard interaction remains unverified.
+For isolated, clearly labelled synthetic captures, set `HUNGERSTRIKE_CAPTURE_DEMO` to one of `kitchen`, `selected`, `receipt`, `receipt-photo`, `plan-next`, `spending`, `about` or `launch`, plus `HUNGERSTRIKE_CAPTURE_PATH` (optionally `HUNGERSTRIKE_CAPTURE_SIZE` and `HUNGERSTRIKE_CAPTURE_DELAY`), and point `HUNGERSTRIKE_DATA_DIR` at a throwaway folder. These routes show a **SYNTHETIC TEST DATA** label.
 
-The [2026-10-10 verification record](verification.md) reports 57 passing workspace tests and inspected application-rendered frames on one Windows 11/NVIDIA setup. Native mouse and keyboard click-through, file dialogs, accessibility, other devices, and broader receipt/photo acceptance remain open. The separate [Android preview source branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has no APK release or physical-device validation.
+## Verification status
 
-Confirmed inventory lives in local SQLite at `%LOCALAPPDATA%\HungerStrike\inventory.sqlite`. The **Data** tab can export a JSON backup and preview an import. The app has no account, cloud sync, telemetry, paid API, or runtime network call in this source checkpoint. Raw receipt lines, photo bytes, and OCR transcripts are not stored in SQLite or backups; reviewed fields and sanitized audit metadata are. [Workflow details](docs/workflow.md) explain confirmation, refunds, corrections, and backup choices.
+See [verification.md](verification.md) for the dated record. In short, for this branch:
 
-The included fixtures use **synthetic test data**. Receipt parsing requires human review; it is not a universal receipt interpreter. No first-party source license has been selected for this public checkpoint.
+- **Tested in hosted Windows CI:** `cargo fmt --check` and `cargo test --workspace` (core: receipts, ledger, budgets, backups, recipes, recovery, expiry; desktop: OCR on synthetic images, corrupt images, cancellation, timeout, per-line review gating, duplicate photo imports, app actions).
+- **Not verified:** the app has not been built or run on the development PC for this branch. Windows Smart App Control was still enforcing and blocked the Rust compiler from loading build-time libraries, so there are no new screenshots and no native mouse/keyboard test of the new receipt screen. Clippy was not run.
+- Earlier builds were rendered and inspected; those frames remain in `assets/screenshots/` and `docs/` with their own provenance records.
 
-Explore the other [PWDS Strike repositories](https://github.com/Gerbzz?tab=repositories&q=Strike) and the [PWDS Strike Launcher](https://github.com/Gerbzz/PWDS-Strike-Launcher).
+## Data and privacy
 
-## PWDS brand artwork
+No account, telemetry, cloud sync or runtime network call. Receipt photos and OCR text stay in memory until you confirm or discard; only reviewed fields and sanitized audit metadata are stored. All fixtures in this repository are **synthetic test data** with invented prices.
 
-The company mark in this masthead is the existing [official PWDS logo](https://github.com/Gerbzz/PWDS-Website/blob/main/public/prowebdevsolutions-logo.png), with the [official orange display asset](https://prowebdevsolutions.com/images/prowebdevsolutions-logo-orange.svg) for dark backgrounds. The HungerStrike mark above it is the centered transparent version of the original dormouse artwork, with [provenance](assets/branding/provenance.json). In the desktop source, PWDS attribution appears on launch and About surfaces, while the working header carries HungerStrike's own name and icon.
+## Credits and licenses
+
+- Receipt OCR: [ocrs](https://github.com/robertknight/ocrs) and [rten](https://github.com/robertknight/rten) by Robert Knight (MIT OR Apache-2.0).
+- OCR models: the published ocrs text detection and recognition models (CC BY-SA 4.0), redistributed unmodified; sources and hashes in [assets/ocr/NOTICE.md](assets/ocr/NOTICE.md).
+- 3D food models: [Poly Haven](https://polyhaven.com) (CC0); see [assets/models/polyhaven/PROVENANCE.md](assets/models/polyhaven/PROVENANCE.md).
+- Built with [Bevy](https://bevyengine.org), [egui](https://github.com/emilk/egui) and SQLite via rusqlite.
+- HungerStrike dormouse artwork is original ([provenance](assets/branding/provenance.json)). PWDS company marks appear only on the launch screen and in About.
+- This README's layout loosely follows the structure of the [PhotoCraft README](https://github.com/storytold/photocraft) (tagline, jump links, feature table, status, credits). No text or assets were copied.
+
+No license has been chosen yet for HungerStrike's own source code. Bundled third-party files keep their own licenses as listed above.
+
+Part of the PWDS Strike suite by [ProWebDevSolutions](https://prowebdevsolutions.com). See the other [Strike repositories](https://github.com/Gerbzz?tab=repositories&q=Strike).

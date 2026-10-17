@@ -211,7 +211,8 @@ fn rebuild_rows(mut placed: Vec<PlacedLine>, skew: f32) -> Vec<String> {
                 .collect::<Vec<_>>()
                 .join("   ")
         })
-        .filter(|row| row.trim().chars().count() > 1)
+        // Drop speckle: rows with fewer than three letters or digits.
+        .filter(|row| row.chars().filter(|c| c.is_ascii_alphanumeric()).count() >= 3)
         .collect()
 }
 

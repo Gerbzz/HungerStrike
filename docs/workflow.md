@@ -4,15 +4,15 @@ HungerStrike is a Windows source preview. This walkthrough uses the repository's
 
 ## 1. Review a purchase before it changes stock
 
-Open [R001-purchase.txt](../core/tests/fixtures/receipts/R001-purchase.txt), paste its contents into **Receipt**, and select **Parse text**. Review the date, each item, quantity, unit, category, price, discount, subtotal, tax, and total. Inventory changes only after **Confirm reviewed purchase**. **Cancel and clear** discards the temporary draft. A purchase date never becomes an expiry date.
+Open [R001-purchase.txt](../core/tests/fixtures/receipts/R001-purchase.txt), paste its contents into **Receipt**, and select **Read pasted text**. Review the date, each item, quantity, unit, category, price, discount, subtotal, tax, and total. Tick each line after comparing it with the receipt; inventory changes only after every line is checked and **Confirm receipt** is selected. **Discard draft** discards the temporary draft. Expiry dates are never read from a receipt: type the package date or choose **Estimate**, which is stored and shown as an estimate. A purchase date never becomes an expiry date.
 
-For a photo, **Open photo · offline OCR** accepts PNG/JPEG under 8 MB and 40 megapixels through a separately installed local English Tesseract at `C:\Program Files\Tesseract-OCR\tesseract.exe`. The engine and language model are not bundled. A stalled engine is stopped after 15 seconds; **Cancel and clear** stops an active job. OCR text remains a temporary draft and clears on confirmation or cancellation. Manual text entry works without Tesseract.
+For a photo, **Scan receipt photo…** accepts PNG/JPEG under 8 MB and 40 megapixels and reads it with the bundled offline ocrs engine. **Cancel scan** stops an active job. OCR text remains a temporary draft and clears on confirmation or cancellation.
 
 ## 2. Handle refunds and corrections deliberately
 
 Open [R002-refund.txt](../core/tests/fixtures/receipts/R002-refund.txt) and parse it. The milk refund can be linked to original lot `R001-L02` with one gallon of stock reversal, or left unlinked. Refunds affect spending either way; unlinked amounts appear separately in **Spending**.
 
-Exact repeat imports do not charge again. If matching source text represents a truly separate purchase, give it a unique reviewed receipt ID and line IDs, then choose **Confirm separate purchase**. That decision is audited. Use **Correct existing receipt** for corrections. Name, date, and expiry corrections can follow stock use; cost or quantity corrections after stock use, and corrections after linked refunds, remain blocked to protect historical allocations.
+Exact repeat imports do not charge again. If matching source text represents a truly separate purchase, give it a unique reviewed receipt ID and line IDs, then choose **Confirm as separate purchase**. That decision is audited. Use **Replace saved receipt with this** for corrections. Name, date, and expiry corrections can follow stock use; cost or quantity corrections after stock use, and corrections after linked refunds, remain blocked to protect historical allocations.
 
 ## 3. Check the kitchen and plan meals
 

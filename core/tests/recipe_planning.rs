@@ -211,9 +211,13 @@ fn recipe(name: &str, quantity: &str, unit: &str) -> Recipe {
 fn insufficient_stock_stays_in_plan_next_and_cannot_be_cooked() {
     let mut store = seeded();
     let meal = recipe("spinach", "6", "oz");
-    let suggestion = suggest_meals(&snapshot(&store).unwrap(), &[meal.clone()], "2026-10-04")
-        .unwrap()
-        .remove(0);
+    let suggestion = suggest_meals(
+        &snapshot(&store).unwrap(),
+        std::slice::from_ref(&meal),
+        "2026-10-04",
+    )
+    .unwrap()
+    .remove(0);
     assert!(!suggestion.available);
     assert_eq!(suggestion.ingredients[0].missing_quantity, "1");
     assert!(cook_recipe(&mut store, &meal, "2026-10-04").is_err());
@@ -487,9 +491,13 @@ fn explicit_cook_consumes_all_previewed_lots_once() {
         .iter()
         .find(|recipe| recipe.id == "egg-spinach-scramble")
         .unwrap();
-    let preview = suggest_meals(&snapshot(&store).unwrap(), &[meal.clone()], "2026-10-04")
-        .unwrap()
-        .remove(0);
+    let preview = suggest_meals(
+        &snapshot(&store).unwrap(),
+        std::slice::from_ref(meal),
+        "2026-10-04",
+    )
+    .unwrap()
+    .remove(0);
     assert!(preview.available);
     assert_eq!(preview.consumption.len(), 2);
     let before = snapshot(&store).unwrap();
