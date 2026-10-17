@@ -16,7 +16,9 @@ fn money(cents: i64) -> String {
 }
 
 fn expiry_before_planning_date(expiry: Option<&str>, planning_date: &str) -> bool {
-    let Some(expiry) = expiry.and_then(|date| chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()) else {
+    let Some(expiry) =
+        expiry.and_then(|date| chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+    else {
         return false;
     };
     let Ok(planning_date) = chrono::NaiveDate::parse_from_str(planning_date, "%Y-%m-%d") else {
@@ -1967,8 +1969,14 @@ mod tests {
 
     #[test]
     fn kitchen_expiry_cue_uses_the_same_planning_date_boundary() {
-        assert!(expiry_before_planning_date(Some("2026-10-03"), "2026-10-04"));
-        assert!(!expiry_before_planning_date(Some("2026-10-04"), "2026-10-04"));
+        assert!(expiry_before_planning_date(
+            Some("2026-10-03"),
+            "2026-10-04"
+        ));
+        assert!(!expiry_before_planning_date(
+            Some("2026-10-04"),
+            "2026-10-04"
+        ));
         assert!(!expiry_before_planning_date(None, "2026-10-04"));
         assert!(!expiry_before_planning_date(Some("unknown"), "2026-10-04"));
         assert!(!expiry_before_planning_date(Some("2026-10-03"), "bad date"));
