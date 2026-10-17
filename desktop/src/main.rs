@@ -1093,6 +1093,18 @@ mod tests {
         assert!(state.source_match.is_some());
         correct_r101_draft(&mut state);
         state.mark_all_reviewed();
+        // The re-reviewed draft differs from the saved one (it has no milk
+        // estimate), so it is refused rather than silently merged or charged.
+        let error = state
+            .dispatch(AppAction::Commit(ReceiptCommit::New))
+            .unwrap_err();
+        assert!(error.contains("already imported"), "{error}");
+        assert_eq!(
+            (state.snapshot.receipt_count, state.snapshot.cash_flow_cents),
+            (1, 1542)
+        );
+        // An identical re-review is accepted as a no-op duplicate.
+        state.dispatch(AppAction::EstimateExpiry(Some(1))).unwrap();
         state
             .dispatch(AppAction::Commit(ReceiptCommit::New))
             .unwrap();

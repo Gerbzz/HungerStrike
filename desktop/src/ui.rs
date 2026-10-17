@@ -23,7 +23,7 @@ const BORDER: egui::Color32 = egui::Color32::from_rgb(217, 226, 222);
 fn card<R>(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui) -> R) -> R {
     egui::Frame::default()
         .fill(CARD)
-        .stroke(egui::Stroke::new(1.0, BORDER))
+        .stroke(egui::Stroke::new(1.0_f32, BORDER))
         .corner_radius(10)
         .inner_margin(egui::Margin::same(16))
         .show(ui, |ui| {
@@ -330,7 +330,7 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
         .frame(
             egui::Frame::default()
                 .fill(egui::Color32::WHITE)
-                .stroke(egui::Stroke::new(1.0, BORDER))
+                .stroke(egui::Stroke::new(1.0_f32, BORDER))
                 .inner_margin(egui::Margin::symmetric(16, 6)),
         )
         .show(ctx, |ui| {
@@ -729,7 +729,7 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
                 egui::Color32::WHITE
             })
             .stroke(egui::Stroke::new(
-                1.0,
+                1.0_f32,
                 if selected {
                     egui::Color32::from_rgb(17, 110, 107)
                 } else {
@@ -937,7 +937,7 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
             let estimate = estimate_expiry(
                 &lot.name,
                 &lot.category,
-                Some(&lot.zone),
+                Some(lot.zone.as_str()),
                 &lot.purchase_date,
             );
             if ui
@@ -1162,7 +1162,7 @@ fn draft_line(
     };
     egui::Frame::default()
         .fill(if item.reviewed { ACCENT_SOFT } else { CARD })
-        .stroke(egui::Stroke::new(1.0, border))
+        .stroke(egui::Stroke::new(1.0_f32, border))
         .corner_radius(8)
         .inner_margin(egui::Margin::symmetric(14, 10))
         .show(ui, |ui| {
