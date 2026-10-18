@@ -1210,7 +1210,7 @@ fn meals(ui: &mut egui::Ui, state: &mut AppState) {
         ui.label("Plan for YYYY-MM-DD");
         ui.text_edit_singleline(&mut state.reference_date);
     });
-    let (_, suggestions) = match recipe_suggestions(state) {
+    let (recipes, suggestions) = match recipe_suggestions(state) {
         Ok(result) => result,
         Err(error) => {
             ui.label(error);
@@ -1240,6 +1240,29 @@ fn meals(ui: &mut egui::Ui, state: &mut AppState) {
     });
     if state.meal_filter == MealFilter::UseSoon {
         ui.label("Dates are user-entered planning cues. Check food condition before cooking.");
+    }
+    state
+        .batch_recipe_ids
+        .retain(|id| recipes.iter().any(|recipe| &recipe.id == id));
+    ui.label("Select recipe cards across these tabs to plan their combined grocery needs.");
+    let batch: Vec<_> = recipes
+        .iter()
+        .filter(|recipe| state.batch_recipe_ids.contains(&recipe.id))
+        .cloned()
+        .collect();
+    if ui
+        .add_enabled(
+            !batch.is_empty(),
+            egui::Button::new(format!(
+                "Add selected meals to shopping list ({})",
+                batch.len()
+            )),
+        )
+        .clicked()
+    {
+        if let Err(error) = state.dispatch(AppAction::AddMissingBatch(batch)) {
+            state.message = error;
+        }
     }
     let visible: Vec<_> = suggestions
         .iter()
@@ -1348,6 +1371,14 @@ fn meal_card(ui: &mut egui::Ui, meal: &MealSuggestion, selected: bool, state: &m
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("View recipe").clicked() {
                         state.selected_recipe_id = Some(meal.id.clone());
+                    }
+                    let mut planned = state.batch_recipe_ids.contains(&meal.id);
+                    if ui.checkbox(&mut planned, "Select").changed() {
+                        if planned {
+                            state.batch_recipe_ids.insert(meal.id.clone());
+                        } else {
+                            state.batch_recipe_ids.remove(&meal.id);
+                        }
                     }
                 });
             });

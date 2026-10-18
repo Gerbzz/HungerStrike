@@ -6,14 +6,15 @@ use bevy::prelude::*;
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
 use hungerstrike_core::{
-    add_recipe_missing_to_shopping, apply_import, budget_view, confirm_receipt,
-    confirm_separate_purchase, cook_recipe, correct_receipt, export_backup,
+    add_recipe_missing_to_shopping, add_recipes_missing_to_shopping, apply_import, budget_view,
+    confirm_receipt, confirm_separate_purchase, cook_recipe, correct_receipt, export_backup,
     matching_source_receipt, parse_text, preview_import, record_inventory_action,
     remove_shopping_item, restore_last_import, review, set_budget, snapshot, AppSnapshot,
     ImportPreview, InventoryAction, Period, ReceiptDraft, Recipe, RecipeCollection,
     ReplaceOrReconcile, Store,
 };
 use std::{
+    collections::HashSet,
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -52,6 +53,7 @@ enum AppAction {
     Inventory(InventoryAction),
     CookRecipe(Recipe),
     AddMissingToShopping(Recipe),
+    AddMissingBatch(Vec<Recipe>),
     RemoveShopping { name: String, unit: String },
     ParseReceipt,
     StartOcr(Vec<u8>),
@@ -95,6 +97,7 @@ struct AppState {
     show_about: bool,
     meal_filter: MealFilter,
     selected_recipe_id: Option<String>,
+    batch_recipe_ids: HashSet<String>,
     hold_launch_for_capture: bool,
     dormouse_logo: Option<bevy_egui::egui::TextureHandle>,
     pwds_logo: Option<bevy_egui::egui::TextureHandle>,
@@ -141,6 +144,7 @@ impl AppState {
             show_about: false,
             meal_filter: MealFilter::CookNow,
             selected_recipe_id: None,
+            batch_recipe_ids: HashSet::new(),
             hold_launch_for_capture: false,
             dormouse_logo: None,
             pwds_logo: None,
@@ -280,6 +284,19 @@ impl AppState {
                 self.message = format!(
                     "Missing ingredients for {} added to your local shopping list.",
                     recipe.name
+                );
+            }
+            AppAction::AddMissingBatch(recipes) => {
+                {
+                    let mut store = self.store.lock().map_err(|e| e.to_string())?;
+                    add_recipes_missing_to_shopping(&mut store, &recipes, &self.reference_date)?;
+                }
+                self.refresh()?;
+                self.meal_filter = MealFilter::PlanNext;
+                self.selected_recipe_id = None;
+                self.message = format!(
+                    "Combined grocery needs for {} selected meals saved to your local shopping list.",
+                    recipes.len()
                 );
             }
             AppAction::RemoveShopping { name, unit } => {
