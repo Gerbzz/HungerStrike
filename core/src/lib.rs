@@ -6,6 +6,7 @@ mod ledger;
 mod model;
 mod receipt;
 mod recipes;
+mod settings;
 mod store;
 
 pub use backup::{
@@ -30,4 +31,5 @@ pub use recipes::{
     remove_shopping_item, suggest_meals, LotUse, MealSuggestion, Recipe, RecipeCollection,
     RecipeIngredient,
 };
+pub use settings::{set_ui_theme, ui_theme};
 pub use store::{RecoveryNote, Store};
