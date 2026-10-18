@@ -67,6 +67,24 @@ pub fn record_inventory_action(store: &mut Store, action: InventoryAction) -> Re
                 .ok_or_else(|| "lot not found".to_string())?;
             lot.zone = zone;
         }
+        InventoryAction::SetExpiry {
+            lot_id,
+            expiry_date,
+            estimated,
+        } => {
+            let expiry_date = expiry_date
+                .as_deref()
+                .filter(|date| !date.trim().is_empty())
+                .map(crate::expiry::parse_user_date)
+                .transpose()?;
+            let lot = state
+                .lots
+                .iter_mut()
+                .find(|lot| lot.id == lot_id)
+                .ok_or_else(|| "lot not found".to_string())?;
+            lot.expiry_estimated = expiry_date.is_some() && estimated;
+            lot.expiry_date = expiry_date;
+        }
     }
     store.save(&state)
 }

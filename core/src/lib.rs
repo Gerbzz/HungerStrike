@@ -1,5 +1,6 @@
 mod backup;
 mod budget;
+mod expiry;
 mod inventory;
 mod ledger;
 mod model;
@@ -12,6 +13,7 @@ pub use backup::{
     PortableBackup, ReplaceOrReconcile,
 };
 pub use budget::{budget_view, set_budget, BudgetView, Period};
+pub use expiry::{estimate_expiry, parse_user_date, ExpiryEstimate};
 pub use inventory::record_inventory_action;
 pub use ledger::{
     confirm_receipt, confirm_separate_purchase, correct_receipt, matching_source_receipt,
@@ -28,4 +30,4 @@ pub use recipes::{
     remove_shopping_item, suggest_meals, LotUse, MealSuggestion, Recipe, RecipeCollection,
     RecipeIngredient,
 };
-pub use store::Store;
+pub use store::{RecoveryNote, Store};

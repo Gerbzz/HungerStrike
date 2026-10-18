@@ -86,6 +86,9 @@ fn record_edit(
             if a.expiry_date != b.expiry_date {
                 fields.push(format!("items[{index}].expiry_date"));
             }
+            if a.expiry_estimated != b.expiry_estimated {
+                fields.push(format!("items[{index}].expiry_estimated"));
+            }
         }
         for (index, (a, b)) in old.refunds.iter().zip(&after.refunds).enumerate() {
             if a.name != b.name {
@@ -154,6 +157,7 @@ fn apply_receipt(state: &mut State, draft: &ReceiptDraft) -> Result<(), String> 
             cost_unknown: item.net_cents.is_none(),
             zone: default_zone(&item.category).into(),
             expiry_date: item.expiry_date.clone(),
+            expiry_estimated: item.expiry_date.is_some() && item.expiry_estimated,
             purchase_date: date.into(),
         });
     }
@@ -398,6 +402,7 @@ pub fn correct_receipt(
                 .ok_or("original lot missing")?;
             lot.name = item.name.clone();
             lot.expiry_date = item.expiry_date.clone();
+            lot.expiry_estimated = item.expiry_date.is_some() && item.expiry_estimated;
             lot.purchase_date = date.into();
         }
         state.receipts[index] = draft.clone();
@@ -622,6 +627,7 @@ pub fn recategorize_item(store: &mut Store, line_id: &str, category: &str) -> Re
             cost_unknown: item.net_cents.is_none(),
             zone: default_zone(category).into(),
             expiry_date: item.expiry_date.clone(),
+            expiry_estimated: item.expiry_date.is_some() && item.expiry_estimated,
             purchase_date,
         });
     } else if old_is_food {

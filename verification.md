@@ -1,4 +1,25 @@
-# HungerStrike Windows preview verification · 2026-10-10
+# HungerStrike verification
+
+## 2026-10-17 · branch `hungerstrike-finish`
+
+Built on `main` at `fc5e8a2` with PR #3 and #4 (`6d0bf4b` … `535afd0`, merged as `030bf1b`) and PR #5 (`40bd235`, `09c4ec8`, merged as `a93ef58`). The `verification/hungerstrike-batch-capture-2026-10-16` branch adds only hosted-capture workflow probes on top of #3 and was not merged. `android-preview` (`df5b866`, 34 commits behind) restructures the desktop crate for an Android NativeActivity; it was inspected but not merged.
+
+| Check | Result |
+| --- | --- |
+| Formatting | `cargo fmt --all --check` passed locally. |
+| Tests | `cargo test --workspace` passed locally on Neil's PC: **103 passed, 0 failed** (core 76: 3 unit + backup 5 + ledger 6 + projections 4 + receipt fixtures 6 + recipe planning 22 + recovery/expiry 6 + review regressions 24; desktop 27). Hosted Windows CI run 39068748957 passed at `c93a5a1`. |
+| Clippy | `cargo clippy -p hungerstrike-core --all-targets -- -D warnings` passed after fixing two lints. Workspace clippy could not finish: Windows Smart App Control (Code Integrity event 3077, policy `{0283ac0f-…}`) blocked `rustc` from loading the `windows_interface` proc-macro DLL. Not worked around. |
+| Smart App Control | At the start of this session SAC was still enforcing (`VerifiedAndReputablePolicyState = 1`) and blocked every local build. Later in the session some builds succeeded (the test and debug app builds), but new proc-macro DLLs were still blocked intermittently. |
+| Bundled OCR | `ocrs` 0.13.1 / `rten` 0.26.0 with the published models in `assets/ocr/`. On `synthetic-receipt-clean.png` it read every line; the parser produced 5 items, subtotal and total $15.42 (one "quantity unknown" flag because `5 OZ` was read as `5 0Z`). On the tilted, noisy `synthetic-receipt-photo.jpg` it read all five item lines and the total; `MILK 2%` came out as `MILK.2%` and the rice price was attached to noise, so the draft correctly does not reconcile until reviewed. Truncated PNG and garbage JPEG are rejected before a draft exists. |
+| App-rendered frames | Eight frames from the `7222c4b` debug executable, each from a fresh synthetic profile: see [docs/CAPTURE_2026-10-17.md](docs/CAPTURE_2026-10-17.md). Includes the real OCR draft, reopening a saved profile (8 lots read back), and recovery from a corrupted `inventory.sqlite` (file preserved as `inventory.unreadable-<timestamp>.sqlite`). |
+| Native interaction | **Not done.** Computer-use access to the HungerStrike window was requested and denied, so no click-through, file dialog, keyboard or 3D picking test was performed on this build. |
+| Platforms | Windows only. Android, iOS, macOS and Linux were not built or tested on this branch. |
+
+Previous record follows.
+
+---
+
+## HungerStrike Windows preview verification · 2026-10-10
 
 This is a dated verification record for the earlier default-branch interface. The README now shows separately sourced [light Kitchen and Meals development previews](docs/LIGHT_PREVIEW_PROVENANCE.md) from a tested draft PR. The screenshots linked below remain historical evidence of the earlier build.
 

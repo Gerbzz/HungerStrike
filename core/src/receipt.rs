@@ -349,7 +349,9 @@ pub fn parse_text(raw: &str) -> ReceiptDraft {
                 net_cents: amount,
                 category,
                 expiry_date: None,
+                expiry_estimated: false,
                 uncertainty: uncertainty.clone(),
+                reviewed: false,
             });
             draft.uncertainty.extend(uncertainty);
         }

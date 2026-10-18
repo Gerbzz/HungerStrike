@@ -3,13 +3,46 @@ use std::sync::Arc;
 
 use bevy_egui::egui::{self, RichText};
 use hungerstrike_core::{
-    budget_view, recategorize_item, review, set_budget, suggest_meals, DraftItem, InventoryAction,
-    MealSuggestion, Period, Recipe, RecipeCollection, RefundLine, ReplaceOrReconcile,
+    budget_view, estimate_expiry, recategorize_item, review, set_budget, suggest_meals, DraftItem,
+    InventoryAction, MealSuggestion, Period, ReceiptDraft, Recipe, RecipeCollection, RefundLine,
+    ReplaceOrReconcile,
 };
 
 use crate::{ocr, AppAction, AppState, MealFilter, ReceiptCommit, Tab};
 
-fn money(cents: i64) -> String {
+const INK: egui::Color32 = egui::Color32::from_rgb(36, 52, 54);
+const MUTED: egui::Color32 = egui::Color32::from_rgb(84, 103, 105);
+const ACCENT: egui::Color32 = egui::Color32::from_rgb(17, 110, 107);
+const ACCENT_SOFT: egui::Color32 = egui::Color32::from_rgb(236, 246, 243);
+const ACCENT_BUTTON: egui::Color32 = egui::Color32::from_rgb(196, 230, 222);
+const WARN: egui::Color32 = egui::Color32::from_rgb(150, 86, 20);
+const CARD: egui::Color32 = egui::Color32::WHITE;
+const BORDER: egui::Color32 = egui::Color32::from_rgb(217, 226, 222);
+
+/// White rounded panel used to group related controls.
+fn card<R>(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    egui::Frame::default()
+        .fill(CARD)
+        .stroke(egui::Stroke::new(1.0_f32, BORDER))
+        .corner_radius(10)
+        .inner_margin(egui::Margin::same(16))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            content(ui)
+        })
+        .inner
+}
+
+/// "2026-10-10", "2026-10-10 (estimate)" or "unknown".
+fn expiry_label(date: Option<&str>, estimated: bool) -> String {
+    match (date, estimated) {
+        (Some(date), true) => format!("{date} (estimate)"),
+        (Some(date), false) => date.to_string(),
+        (None, _) => "unknown".into(),
+    }
+}
+
+pub(crate) fn money(cents: i64) -> String {
     let sign = if cents < 0 { "-" } else { "" };
     let absolute = cents.unsigned_abs();
     format!("{sign}${}.{:02}", absolute / 100, absolute % 100)
@@ -95,6 +128,23 @@ fn about_window(ctx: &egui::Context, state: &mut AppState) {
                 ui.hyperlink_to("prowebdevsolutions.com", "https://prowebdevsolutions.com");
                 ui.add_space(8.0);
             });
+            egui::CollapsingHeader::new("Credits and licenses")
+                .id_salt("about_credits")
+                .show(ui, |ui| {
+                    for line in [
+                        "Receipt OCR: ocrs and rten by Robert Knight (MIT or Apache-2.0).",
+                        "OCR models: ocrs text detection and recognition models (CC BY-SA 4.0), trained on HierText and synthetic data.",
+                        "3D food models: Poly Haven, by Oliver Harries and others (CC0).",
+                        "Built with Bevy and egui (MIT or Apache-2.0) and SQLite (public domain).",
+                    ] {
+                        ui.label(RichText::new(line).size(12.0));
+                    }
+                    ui.label(
+                        RichText::new("Everything runs on this computer: no account, cloud service or paid API.")
+                            .size(12.0)
+                            .color(MUTED),
+                    );
+                });
         });
 }
 
@@ -186,33 +236,6 @@ fn metric(ui: &mut egui::Ui, label: &str, value: String, color: egui::Color32) {
         });
 }
 
-fn option_text(ui: &mut egui::Ui, label: &str, value: &mut Option<String>) {
-    let mut text = value.clone().unwrap_or_default();
-    ui.horizontal(|ui| {
-        ui.label(label);
-        if ui.text_edit_singleline(&mut text).changed() {
-            *value = if text.trim().is_empty() {
-                None
-            } else {
-                Some(text.clone())
-            };
-        }
-    });
-}
-
-fn option_cents(ui: &mut egui::Ui, label: &str, value: &mut Option<i64>) {
-    ui.horizontal(|ui| {
-        ui.label(label);
-        let mut known = value.is_some();
-        if ui.checkbox(&mut known, "known").changed() {
-            *value = if known { Some(0) } else { None };
-        }
-        if let Some(value) = value.as_mut() {
-            ui.add(egui::DragValue::new(value).speed(1).suffix(" cents"));
-        }
-    });
-}
-
 pub fn draw(ctx: &egui::Context, state: &mut AppState) {
     if !state.style_ready {
         state.dormouse_logo = brand_texture(
@@ -277,7 +300,12 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
         style.spacing.button_padding = egui::vec2(12.0, 7.0);
         style.visuals.panel_fill = egui::Color32::from_rgb(246, 248, 246);
         style.visuals.window_fill = egui::Color32::WHITE;
-        style.visuals.extreme_bg_color = egui::Color32::WHITE;
+        // Text fields sit on a faint tint with a visible outline so they read
+        // as editable on white cards.
+        style.visuals.extreme_bg_color = egui::Color32::from_rgb(244, 247, 246);
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0_f32, BORDER);
+        style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, ACCENT);
+        style.visuals.widgets.active.bg_stroke = egui::Stroke::new(1.5_f32, ACCENT);
         style.visuals.override_text_color = Some(egui::Color32::from_rgb(36, 52, 54));
         style.visuals.selection.bg_fill = egui::Color32::from_rgb(17, 110, 107);
         style.visuals.selection.stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
@@ -301,54 +329,80 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
         }
         state.startup_complete = true;
     }
+    // Compact navigation bar. App and company branding live on the launch
+    // screen and in About, so the working view spends its height on content.
     egui::TopBottomPanel::top("header")
         .frame(
             egui::Frame::default()
-                .fill(egui::Color32::from_rgb(29, 43, 46))
-                .inner_margin(egui::Margin::symmetric(22, 9)),
+                .fill(egui::Color32::WHITE)
+                .stroke(egui::Stroke::new(1.0_f32, BORDER))
+                .inner_margin(egui::Margin::symmetric(16, 6)),
         )
         .show(ctx, |ui| {
-            ui.set_min_height(48.0);
-            ui.horizontal_wrapped(|ui| {
-                if let Some(logo) = &state.dormouse_logo {
-                    ui.add(egui::Image::new((logo.id(), egui::vec2(38.0, 38.0))));
-                    ui.add_space(5.0);
-                }
-                ui.label(
-                    RichText::new("HungerStrike")
-                        .size(22.0)
-                        .strong()
-                        .color(egui::Color32::from_rgb(226, 244, 237)),
-                );
-                ui.add_space(16.0);
-                for (label, tab) in [
-                    ("Kitchen", Tab::Kitchen),
-                    ("Receipt", Tab::Receipt),
-                    ("Meals", Tab::Meals),
-                    ("Spending", Tab::Spending),
-                    ("Data", Tab::Data),
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                for (label, tab, hint) in [
+                    ("Kitchen", Tab::Kitchen, "Fridge, freezer and pantry stock"),
+                    (
+                        "Receipts",
+                        Tab::Receipt,
+                        "Scan or paste a receipt and review it",
+                    ),
+                    (
+                        "Meals",
+                        Tab::Meals,
+                        "Recipes from what you have, and a shopping list",
+                    ),
+                    ("Spending", Tab::Spending, "Food spending and budgets"),
+                    ("Data", Tab::Data, "Backup and restore"),
                 ] {
-                    if ui
-                        .selectable_label(
-                            state.tab == tab,
-                            RichText::new(label)
-                                .size(15.0)
-                                .color(egui::Color32::from_rgb(229, 239, 237)),
-                        )
-                        .clicked()
-                    {
+                    let selected = state.tab == tab;
+                    let mut text = RichText::new(label).size(15.0);
+                    text = if selected {
+                        text.color(egui::Color32::WHITE).strong()
+                    } else {
+                        text.color(INK)
+                    };
+                    let button = egui::Button::new(text)
+                        .fill(if selected {
+                            ACCENT
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        })
+                        .stroke(egui::Stroke::NONE)
+                        .corner_radius(6)
+                        .min_size(egui::vec2(84.0, 30.0));
+                    if ui.add(button).on_hover_text(hint).clicked() {
                         let _ = state.dispatch(AppAction::Navigate(tab));
                     }
                 }
-                ui.add_space(18.0);
-                if ui.button("About").clicked() {
-                    state.show_about = true;
-                }
-                ui.label(
-                    RichText::new("PRIVATE · LOCAL DATA")
-                        .size(13.0)
-                        .color(egui::Color32::from_rgb(162, 188, 178)),
-                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add(egui::Button::new("About").min_size(egui::vec2(64.0, 28.0)))
+                        .clicked()
+                    {
+                        state.show_about = true;
+                    }
+                    ui.label(
+                        RichText::new("Stored on this computer only")
+                            .size(12.0)
+                            .color(MUTED),
+                    );
+                    if state.synthetic_banner {
+                        egui::Frame::default()
+                            .fill(egui::Color32::from_rgb(255, 236, 214))
+                            .corner_radius(4)
+                            .inner_margin(egui::Margin::symmetric(8, 3))
+                            .show(ui, |ui| {
+                                ui.label(
+                                    RichText::new("SYNTHETIC TEST DATA")
+                                        .size(12.0)
+                                        .strong()
+                                        .color(WARN),
+                                );
+                            });
+                    }
+                });
             });
         });
     if state.tab == Tab::Kitchen {
@@ -410,7 +464,7 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                 });
             });
         egui::Area::new("scene_caption".into())
-            .anchor(egui::Align2::LEFT_TOP, egui::vec2(312.0, 70.0))
+            .anchor(egui::Align2::LEFT_TOP, egui::vec2(312.0, 56.0))
             .show(ctx, |ui| {
                 egui::Frame::group(ui.style())
                     .fill(egui::Color32::from_rgba_unmultiplied(255, 255, 255, 237))
@@ -646,10 +700,12 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
         });
     ui.separator();
     let lots = state.snapshot.lots.clone();
-    let visible: Vec<_> = lots
+    let mut visible: Vec<_> = lots
         .into_iter()
         .filter(|lot| lot.quantity != "0" && (state.zone == "all" || lot.zone == state.zone))
         .collect();
+    // Soonest-dated stock first; undated stock keeps receipt order at the end.
+    visible.sort_by_key(|lot| (lot.expiry_date.is_none(), lot.expiry_date.clone()));
     ui.label(
         RichText::new(format!("{} confirmed stock lot(s) shown", visible.len()))
             .size(12.0)
@@ -678,7 +734,7 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
                 egui::Color32::WHITE
             })
             .stroke(egui::Stroke::new(
-                1.0,
+                1.0_f32,
                 if selected {
                     egui::Color32::from_rgb(17, 110, 107)
                 } else {
@@ -704,7 +760,7 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
                         } else {
                             money(lot.remaining_cost_cents)
                         },
-                        lot.expiry_date.as_deref().unwrap_or("unknown")
+                        expiry_label(lot.expiry_date.as_deref(), lot.expiry_estimated)
                     ))
                     .size(12.0)
                     .color(egui::Color32::from_rgb(82, 101, 102)),
@@ -809,7 +865,7 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
                 ));
                 ui.label(format!(
                     "Use by: {}",
-                    lot.expiry_date.as_deref().unwrap_or("unknown")
+                    expiry_label(lot.expiry_date.as_deref(), lot.expiry_estimated)
                 ));
                 if expiry_before_planning_date(lot.expiry_date.as_deref(), &state.reference_date) {
                     ui.colored_label(
@@ -851,9 +907,85 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
                 }
             }
         });
+        ui.separator();
+        ui.strong("Expiry date");
+        ui.label(
+            RichText::new(if lot.expiry_estimated {
+                "Currently an estimate. Enter the date printed on the package to replace it."
+            } else if lot.expiry_date.is_some() {
+                "Entered by you."
+            } else {
+                "Unknown. Receipts do not print expiry dates."
+            })
+            .size(12.0)
+            .color(if lot.expiry_estimated { WARN } else { MUTED }),
+        );
+        ui.horizontal_wrapped(|ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut state.expiry_text)
+                    .desired_width(108.0)
+                    .hint_text("YYYY-MM-DD"),
+            );
+            if ui
+                .button("Save date")
+                .on_hover_text("Save the date as entered by you")
+                .clicked()
+            {
+                action = Some(InventoryAction::SetExpiry {
+                    lot_id: state.lot_id.clone(),
+                    expiry_date: Some(state.expiry_text.clone()),
+                    estimated: false,
+                });
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            let estimate = estimate_expiry(
+                &lot.name,
+                &lot.category,
+                Some(lot.zone.as_str()),
+                &lot.purchase_date,
+            );
+            if ui
+                .add_enabled(estimate.is_some(), egui::Button::new("Use estimate"))
+                .on_hover_text(
+                    estimate
+                        .as_ref()
+                        .map(|estimate| estimate.basis.clone())
+                        .unwrap_or_else(|| "No estimate for this kind of item".into()),
+                )
+                .clicked()
+            {
+                if let Some(estimate) = estimate {
+                    action = Some(InventoryAction::SetExpiry {
+                        lot_id: state.lot_id.clone(),
+                        expiry_date: Some(estimate.date),
+                        estimated: true,
+                    });
+                }
+            }
+            if ui
+                .add_enabled(lot.expiry_date.is_some(), egui::Button::new("Clear"))
+                .clicked()
+            {
+                action = Some(InventoryAction::SetExpiry {
+                    lot_id: state.lot_id.clone(),
+                    expiry_date: None,
+                    estimated: false,
+                });
+            }
+        });
         if let Some(action) = action {
-            if let Err(error) = state.dispatch(AppAction::Inventory(action)) {
-                state.message = error;
+            match state.dispatch(AppAction::Inventory(action)) {
+                Ok(()) => {
+                    state.expiry_text = state
+                        .snapshot
+                        .lots
+                        .iter()
+                        .find(|lot| lot.id == state.lot_id)
+                        .and_then(|lot| lot.expiry_date.clone())
+                        .unwrap_or_default();
+                }
+                Err(error) => state.message = error,
             }
         }
     } else {
@@ -884,346 +1016,647 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
                 })
         })
         .collect();
-    egui::CollapsingHeader::new(format!("Use soon in this view ({})", use_soon.len())).show(
-        ui,
-        |ui| {
-            for lot in use_soon {
-                ui.label(format!(
-                    "{}  ·  {}",
-                    lot.name,
-                    lot.expiry_date.as_deref().unwrap_or("unknown")
-                ));
-            }
-            ui.label("Dates are planning cues; check food condition before use.");
-        },
-    );
-}
-
-fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
-    ui.heading("Review a receipt");
-    ui.label(
-        "Paste text or open a local PNG/JPEG. Review the lines and totals before anything enters inventory.",
-    );
-    if state.ocr_task.is_some() {
-        ui.colored_label(
-            egui::Color32::from_rgb(160, 96, 30),
-            "Offline OCR is running. Cancel and clear stops the engine.",
-        );
-    }
-    egui::ScrollArea::vertical()
-        .id_salt("receipt_source_scroll")
-        .max_height(170.0)
+    let mut use_soon: Vec<_> = use_soon.into_iter().cloned().collect();
+    use_soon.sort_by(|a, b| a.expiry_date.cmp(&b.expiry_date));
+    egui::CollapsingHeader::new(format!("Use first ({})", use_soon.len()))
+        .default_open(true)
         .show(ui, |ui| {
-            ui.add(
-                egui::TextEdit::multiline(&mut state.raw_text)
-                    .desired_width(ui.available_width())
-                    .hint_text("Paste receipt text here"),
+            if use_soon.is_empty() {
+                ui.label(
+                    RichText::new("Nothing dated within the next 3 days.")
+                        .size(13.0)
+                        .color(MUTED),
+                );
+            }
+            let mut select = None;
+            for lot in &use_soon {
+                if ui
+                    .link(format!(
+                        "{}  ·  {}",
+                        lot.name,
+                        expiry_label(lot.expiry_date.as_deref(), lot.expiry_estimated)
+                    ))
+                    .on_hover_text("Select this item")
+                    .clicked()
+                {
+                    select = Some(lot.id.clone());
+                }
+            }
+            if let Some(id) = select {
+                let _ = state.dispatch(AppAction::SelectLot(id));
+            }
+            ui.label(
+                RichText::new("Dates are planning cues; check food condition before use.")
+                    .size(12.0)
+                    .color(MUTED),
             );
         });
-    ui.horizontal(|ui| {
-        if ui.button("Parse text").clicked() {
-            if let Err(error) = state.dispatch(AppAction::ParseReceipt) {
-                state.message = error;
+}
+
+const CATEGORIES: &[(&str, &str)] = &[
+    ("food.produce", "Food · produce"),
+    ("food.dairy", "Food · dairy & eggs"),
+    ("food.meat", "Food · meat & fish"),
+    ("food.pantry", "Food · pantry"),
+    ("food.beverage", "Food · drinks"),
+    ("food.frozen", "Food · frozen"),
+    ("food.other", "Food · other"),
+    ("household.cleaning", "Household · cleaning"),
+    ("household.paper", "Household · paper"),
+    ("household.other", "Household · other"),
+];
+
+fn category_label(category: &str) -> String {
+    CATEGORIES
+        .iter()
+        .find(|(value, _)| *value == category)
+        .map(|(_, label)| (*label).to_string())
+        .unwrap_or_else(|| {
+            if category == "unclassified" {
+                "Choose a category".into()
+            } else {
+                category.to_string()
             }
-        }
-        if ui
-            .add_enabled(
-                state.ocr_task.is_none(),
-                egui::Button::new("Open photo · offline OCR"),
-            )
-            .clicked()
-        {
-            if let Some(path) = rfd::FileDialog::new()
-                .add_filter("Receipt photo", &["png", "jpg", "jpeg"])
-                .pick_file()
-            {
-                let result = std::fs::metadata(&path)
-                    .map_err(|e| e.to_string())
-                    .and_then(|metadata| {
-                        if metadata.len() > ocr::MAX_IMAGE_BYTES as u64 {
-                            Err("Receipt photo is over the 8 MB local limit".into())
-                        } else {
-                            std::fs::read(&path).map_err(|e| e.to_string())
-                        }
-                    })
-                    .and_then(|bytes| state.dispatch(AppAction::StartOcr(bytes)));
-                if let Err(error) = result {
-                    state.message = format!("{error}. Paste or type the receipt instead.");
-                }
+        })
+}
+
+fn category_picker(ui: &mut egui::Ui, id: impl std::hash::Hash, category: &mut String) {
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(category_label(category))
+        .width(190.0)
+        .show_ui(ui, |ui| {
+            for (value, label) in CATEGORIES {
+                ui.selectable_value(category, (*value).to_string(), *label);
             }
-        }
-        if ui.button("Cancel and clear").clicked() {
-            let _ = state.dispatch(AppAction::CancelReceipt);
-        }
-    });
-    let Some(mut draft) = state.draft.take() else {
-        return;
+        });
+}
+
+/// Parse "$4.29", "4.29", "-1.79" or "4" into cents.
+fn parse_money(input: &str) -> Option<i64> {
+    let trimmed = input.trim();
+    let (negative, body) = match trimmed.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, trimmed),
     };
-    ui.add_space(14.0);
-    ui.separator();
-    ui.heading("1. Check receipt details");
+    let cents = parse_budget_dollars(body)?;
+    Some(if negative { -cents } else { cents })
+}
+
+fn money_field(ui: &mut egui::Ui, value: &mut i64) -> egui::Response {
+    ui.add(
+        egui::DragValue::new(value)
+            .speed(1)
+            .range(-100_000_000..=100_000_000)
+            .custom_formatter(|n, _| money(n as i64))
+            .custom_parser(|text| parse_money(text).map(|cents| cents as f64)),
+    )
+}
+
+fn optional_money(ui: &mut egui::Ui, label: &str, value: &mut Option<i64>) {
     ui.horizontal(|ui| {
-        metric(
-            ui,
-            "purchase lines",
-            draft.items.len().to_string(),
-            egui::Color32::from_rgb(16, 112, 100),
-        );
-        metric(
-            ui,
-            "printed total",
-            draft
-                .printed_total_cents
-                .map(money)
-                .unwrap_or_else(|| "unknown".into()),
-            egui::Color32::from_rgb(45, 99, 135),
-        );
-        metric(
-            ui,
-            "source flags",
-            draft.uncertainty.len().to_string(),
-            egui::Color32::from_rgb(160, 96, 30),
-        );
-    });
-    ui.horizontal(|ui| {
-        ui.label("Receipt ID");
-        let previous_id = draft.id.clone();
-        if ui.text_edit_singleline(&mut draft.id).changed() {
-            for item in &mut draft.items {
-                if let Some(suffix) = item.line_id.strip_prefix(&format!("{previous_id}-L")) {
-                    item.line_id = format!("{}-L{}", draft.id, suffix);
-                }
-            }
-            state.separate_ack = false;
+        ui.add_sized([118.0, 22.0], egui::Label::new(label));
+        let mut known = value.is_some();
+        if ui
+            .checkbox(&mut known, "known")
+            .on_hover_text("Untick when the receipt does not show this amount")
+            .changed()
+        {
+            *value = if known { Some(0) } else { None };
+        }
+        if let Some(amount) = value.as_mut() {
+            money_field(ui, amount);
+        } else {
+            ui.label(RichText::new("unknown").color(MUTED));
         }
     });
-    let previous_date = draft.purchase_date.clone();
-    option_text(ui, "Purchase date YYYY-MM-DD", &mut draft.purchase_date);
-    if draft.purchase_date != previous_date {
-        state.separate_ack = false;
+}
+
+fn text_field(ui: &mut egui::Ui, value: &mut Option<String>, width: f32, hint: &str) -> bool {
+    let mut text = value.clone().unwrap_or_default();
+    let changed = ui
+        .add(
+            egui::TextEdit::singleline(&mut text)
+                .desired_width(width)
+                .hint_text(hint),
+        )
+        .changed();
+    if changed {
+        *value = if text.trim().is_empty() {
+            None
+        } else {
+            Some(text.trim().to_string())
+        };
     }
-    if let Some((id, date)) = &state.source_match {
-        ui.colored_label(egui::Color32::from_rgb(160, 96, 30),
-            format!("Matching source already imported as {id} on {date}. Review the identity and date before choosing a separate purchase."));
-        ui.checkbox(
-            &mut state.separate_ack,
-            "I checked: this is a separate purchase",
-        );
-    }
-    if !draft.uncertainty.is_empty() {
-        ui.label(format!(
-            "Source uncertainty: {}",
-            draft.uncertainty.join(", ")
-        ));
-    }
-    option_cents(ui, "Printed subtotal", &mut draft.printed_subtotal_cents);
-    option_cents(ui, "Printed tax", &mut draft.printed_tax_cents);
-    option_cents(ui, "Printed total", &mut draft.printed_total_cents);
-    ui.label("Purchase date never sets an expiry date.");
-    let ready = review(draft.clone()).is_ok();
-    ui.label(if ready {
-        "Totals reconcile. Check every line below before confirming at the end."
+    changed
+}
+
+fn draft_line(
+    ui: &mut egui::Ui,
+    index: usize,
+    item: &mut DraftItem,
+    remove: &mut Option<usize>,
+    estimate: &mut Option<usize>,
+) {
+    let problems = crate::review_hints::line_problems(item);
+    let border = if !problems.is_empty() {
+        WARN
+    } else if item.reviewed {
+        ACCENT
     } else {
-        "Correct the lines and totals below before confirming."
-    });
-    let mut remove = None;
-    ui.separator();
-    ui.heading("2. Purchased items");
-    ui.label(
-        "Open each line to correct its name, quantity, unit, category, price and optional expiry.",
-    );
-    for (index, item) in draft.items.iter_mut().enumerate() {
-        egui::CollapsingHeader::new(format!("{} · {}", index + 1, item.name))
-            .default_open(index < 2 || !item.uncertainty.is_empty())
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Name");
-                    ui.text_edit_singleline(&mut item.name);
+        BORDER
+    };
+    egui::Frame::default()
+        .fill(if item.reviewed { ACCENT_SOFT } else { CARD })
+        .stroke(egui::Stroke::new(1.0_f32, border))
+        .corner_radius(8)
+        .inner_margin(egui::Margin::symmetric(14, 10))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut item.reviewed, "")
+                    .on_hover_text("Tick after comparing this line with the receipt");
+                ui.label(RichText::new(format!("{}.", index + 1)).strong().color(MUTED));
+                ui.add(
+                    egui::TextEdit::singleline(&mut item.name)
+                        .desired_width((ui.available_width() - 210.0).max(140.0))
+                        .hint_text("Item name")
+                        .font(egui::TextStyle::Button),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .small_button("Remove")
+                        .on_hover_text("Remove this line from the draft")
+                        .clicked()
+                    {
+                        *remove = Some(index);
+                    }
+                    ui.label(
+                        RichText::new(if item.reviewed {
+                            "Checked"
+                        } else {
+                            "Not checked"
+                        })
+                        .size(12.0)
+                        .color(if item.reviewed { ACCENT } else { MUTED }),
+                    );
                 });
-                option_text(ui, "Quantity", &mut item.quantity);
-                option_text(ui, "Unit", &mut item.unit);
-                ui.horizontal(|ui| {
-                    ui.label("Category");
-                    ui.text_edit_singleline(&mut item.category);
-                });
-                option_cents(ui, "Gross amount", &mut item.gross_cents);
-                ui.horizontal(|ui| {
-                    ui.label("Discount cents (negative)");
-                    ui.add(egui::DragValue::new(&mut item.discount_cents));
-                });
+            });
+            if !item.raw.trim().is_empty() {
+                ui.label(
+                    RichText::new(format!("Read from receipt:  {}", item.raw.trim()))
+                        .monospace()
+                        .size(12.0)
+                        .color(MUTED),
+                );
+            }
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Qty");
+                text_field(ui, &mut item.quantity, 56.0, "1");
+                ui.label("Unit");
+                text_field(ui, &mut item.unit, 64.0, "each");
+                ui.add_space(6.0);
+                category_picker(ui, ("draft_category", index), &mut item.category);
+                ui.add_space(6.0);
+                ui.label("Price");
+                let mut gross = item.gross_cents.unwrap_or(0);
+                if item.gross_cents.is_some() {
+                    if money_field(ui, &mut gross).changed() {
+                        item.gross_cents = Some(gross);
+                    }
+                } else if ui
+                    .button("Enter price")
+                    .on_hover_text("The price could not be read; set it from the receipt")
+                    .clicked()
+                {
+                    item.gross_cents = Some(0);
+                }
+                ui.label("Discount");
+                money_field(ui, &mut item.discount_cents);
                 item.net_cents = item
                     .gross_cents
                     .and_then(|gross| gross.checked_add(item.discount_cents));
-                ui.label(format!(
-                    "Net: {}",
-                    item.net_cents
-                        .map(money)
-                        .unwrap_or_else(|| "unknown".into())
-                ));
-                option_text(ui, "Expiry YYYY-MM-DD (optional)", &mut item.expiry_date);
-                if !item.uncertainty.is_empty() {
-                    ui.label(format!(
-                        "Source uncertainty: {}",
-                        item.uncertainty.join(", ")
-                    ));
-                }
-                if ui.button("Remove item").clicked() {
-                    remove = Some(index);
-                }
+                ui.label(
+                    RichText::new(format!(
+                        "= {}",
+                        item.net_cents
+                            .map(money)
+                            .unwrap_or_else(|| "unknown".into())
+                    ))
+                    .strong(),
+                );
             });
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Expiry");
+                let before = item.expiry_date.clone();
+                if text_field(ui, &mut item.expiry_date, 104.0, "YYYY-MM-DD")
+                    && item.expiry_date != before
+                {
+                    // A typed date is the person's own, not an estimate.
+                    item.expiry_estimated = false;
+                }
+                if item.category.starts_with("food.")
+                    && ui
+                        .small_button("Estimate")
+                        .on_hover_text(
+                            "Suggest a rough date from the purchase date. It is saved as an estimate.",
+                        )
+                        .clicked()
+                {
+                    *estimate = Some(index);
+                }
+                let (note, color) = match (&item.expiry_date, item.expiry_estimated) {
+                    (Some(_), true) => (
+                        "Estimated, not printed on the receipt. Edit to replace.",
+                        WARN,
+                    ),
+                    (Some(_), false) => ("Entered by you", MUTED),
+                    (None, _) => ("Optional. Receipts do not print expiry dates.", MUTED),
+                };
+                ui.label(RichText::new(note).size(12.0).color(color));
+            });
+            let mut notes: Vec<String> = problems.iter().map(|p| p.to_string()).collect();
+            notes.extend(
+                item.uncertainty
+                    .iter()
+                    .filter(|flag| flag.as_str() != "added during review")
+                    .map(|flag| format!("scanner flagged: {flag}")),
+            );
+            if !notes.is_empty() {
+                ui.label(RichText::new(notes.join("  ·  ")).size(12.0).color(WARN));
+            }
+        });
+}
+
+fn run_estimate(state: &mut AppState, draft: &mut ReceiptDraft, index: Option<usize>) {
+    state.draft = Some(draft.clone());
+    let result = state.dispatch(AppAction::EstimateExpiry(index));
+    if let Some(updated) = state.draft.take() {
+        *draft = updated;
+    }
+    if let Err(error) = result {
+        state.message = error;
+    }
+}
+
+fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(RichText::new("RECEIPT").size(11.0).strong().color(ACCENT));
+    ui.heading("Add a receipt");
+    ui.label(
+        RichText::new(
+            "Scan a photo or paste the text. Nothing is saved until you have checked every line.",
+        )
+        .color(MUTED),
+    );
+    ui.add_space(8.0);
+    card(ui, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            let running = state.ocr_task.is_some();
+            if ui
+                .add_enabled(
+                    !running,
+                    egui::Button::new("Scan receipt photo…").fill(ACCENT_BUTTON),
+                )
+                .on_hover_text(format!(
+                    "PNG or JPEG up to 8 MB, read on this computer with {}.",
+                    ocr::ENGINE_LABEL
+                ))
+                .clicked()
+            {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_title("Choose a receipt photo")
+                    .add_filter("Receipt photo", &["png", "jpg", "jpeg"])
+                    .pick_file()
+                {
+                    let result = std::fs::metadata(&path)
+                        .map_err(|e| e.to_string())
+                        .and_then(|metadata| {
+                            if metadata.len() > ocr::MAX_IMAGE_BYTES as u64 {
+                                Err("That photo is over the 8 MB limit".into())
+                            } else {
+                                std::fs::read(&path).map_err(|e| e.to_string())
+                            }
+                        })
+                        .and_then(|bytes| state.dispatch(AppAction::StartOcr(bytes)));
+                    if let Err(error) = result {
+                        state.message = format!("{error}. You can paste the text instead.");
+                    }
+                }
+            }
+            if ui
+                .add_enabled(
+                    !running && !state.raw_text.trim().is_empty(),
+                    egui::Button::new("Read pasted text"),
+                )
+                .clicked()
+            {
+                if let Err(error) = state.dispatch(AppAction::ParseReceipt) {
+                    state.message = error;
+                }
+            }
+            if ui
+                .add_enabled(
+                    running || state.draft.is_some() || !state.raw_text.is_empty(),
+                    egui::Button::new(if running {
+                        "Cancel scan"
+                    } else {
+                        "Discard draft"
+                    }),
+                )
+                .on_hover_text("Stops any scan and clears the draft. Nothing is saved.")
+                .clicked()
+            {
+                let _ = state.dispatch(AppAction::CancelReceipt);
+            }
+            if running {
+                ui.add(egui::Spinner::new());
+                ui.label(RichText::new("Reading the photo on this computer…").color(MUTED));
+            }
+        });
+        egui::CollapsingHeader::new("Receipt text")
+            .id_salt("receipt_source_text")
+            .default_open(state.draft.is_none())
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .id_salt("receipt_source_scroll")
+                    .max_height(170.0)
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut state.raw_text)
+                                .desired_width(ui.available_width())
+                                .desired_rows(6)
+                                .font(egui::TextStyle::Monospace)
+                                .hint_text("Paste receipt text here, one line per item"),
+                        );
+                    });
+            });
+    });
+    let Some(mut draft) = state.draft.take() else {
+        ui.add_space(12.0);
+        ui.label(
+            RichText::new(
+                "Photos and receipt text stay on this computer. Only the reviewed lines are saved.",
+            )
+            .size(13.0)
+            .color(MUTED),
+        );
+        return;
+    };
+    ui.add_space(10.0);
+    card(ui, |ui| {
+        ui.label(RichText::new("Receipt details").strong().size(17.0));
+        egui::Grid::new("receipt_detail_grid")
+            .num_columns(2)
+            .spacing(egui::vec2(14.0, 8.0))
+            .show(ui, |ui| {
+                ui.label("Receipt ID");
+                let previous_id = draft.id.clone();
+                if ui
+                    .add(egui::TextEdit::singleline(&mut draft.id).desired_width(180.0))
+                    .changed()
+                {
+                    for item in &mut draft.items {
+                        if let Some(suffix) = item.line_id.strip_prefix(&format!("{previous_id}-L"))
+                        {
+                            item.line_id = format!("{}-L{}", draft.id, suffix);
+                        }
+                    }
+                    state.separate_ack = false;
+                }
+                ui.end_row();
+                ui.label("Purchase date");
+                let previous_date = draft.purchase_date.clone();
+                ui.horizontal(|ui| {
+                    text_field(ui, &mut draft.purchase_date, 120.0, "YYYY-MM-DD");
+                    ui.label(
+                        RichText::new("Used for spending. It never sets an expiry date.")
+                            .size(12.0)
+                            .color(MUTED),
+                    );
+                });
+                if draft.purchase_date != previous_date {
+                    state.separate_ack = false;
+                }
+                ui.end_row();
+            });
+        optional_money(ui, "Printed subtotal", &mut draft.printed_subtotal_cents);
+        optional_money(ui, "Printed tax", &mut draft.printed_tax_cents);
+        optional_money(ui, "Printed total", &mut draft.printed_total_cents);
+        if let Some((id, date)) = &state.source_match {
+            ui.add_space(4.0);
+            ui.colored_label(
+                WARN,
+                format!("This receipt matches one already saved as {id} on {date}. Confirming it again is recorded as a duplicate and changes nothing."),
+            );
+            ui.checkbox(
+                &mut state.separate_ack,
+                "It really is a separate purchase (I changed the receipt ID and date)",
+            );
+        }
+    });
+    ui.add_space(10.0);
+    let total_lines = draft.items.len();
+    let checked = draft.items.iter().filter(|item| item.reviewed).count();
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Items").strong().size(17.0));
+        ui.label(
+            RichText::new(format!("{checked} of {total_lines} checked"))
+                .color(if checked == total_lines { ACCENT } else { WARN }),
+        );
+    });
+    ui.label(
+        RichText::new("Compare each line with the receipt, correct it, then tick it.")
+            .size(13.0)
+            .color(MUTED),
+    );
+    let mut remove = None;
+    let mut estimate = None;
+    for (index, item) in draft.items.iter_mut().enumerate() {
+        draft_line(ui, index, item, &mut remove, &mut estimate);
+        ui.add_space(4.0);
     }
     if let Some(index) = remove {
         draft.items.remove(index);
     }
-    if ui.button("Add item").clicked() {
-        let mut index = 1;
-        while draft
-            .items
-            .iter()
-            .any(|item| item.line_id == format!("{}-L{index:02}", draft.id))
-        {
-            index += 1;
+    let mut estimate_all = false;
+    ui.horizontal_wrapped(|ui| {
+        if ui.button("Add line").clicked() {
+            let mut index = 1;
+            while draft
+                .items
+                .iter()
+                .any(|item| item.line_id == format!("{}-L{index:02}", draft.id))
+            {
+                index += 1;
+            }
+            draft.items.push(DraftItem {
+                line_id: format!("{}-L{index:02}", draft.id),
+                raw: String::new(),
+                name: String::new(),
+                quantity: Some("1".into()),
+                unit: Some("each".into()),
+                gross_cents: Some(0),
+                discount_cents: 0,
+                net_cents: Some(0),
+                category: "food.pantry".into(),
+                expiry_date: None,
+                expiry_estimated: false,
+                uncertainty: vec!["added during review".into()],
+                reviewed: false,
+            });
         }
-        draft.items.push(DraftItem {
-            line_id: format!("{}-L{index:02}", draft.id),
-            raw: String::new(),
-            name: String::new(),
-            quantity: Some("1".into()),
-            unit: Some("each".into()),
-            gross_cents: Some(0),
-            discount_cents: 0,
-            net_cents: Some(0),
-            category: "food.pantry".into(),
-            expiry_date: None,
-            uncertainty: vec!["added during review".into()],
-        });
+        estimate_all = ui
+            .button("Estimate expiry for undated food")
+            .on_hover_text("Fills rough, clearly labelled estimates only where no date is set")
+            .clicked();
+    });
+    if estimate_all {
+        run_estimate(state, &mut draft, None);
+    } else if let Some(index) = estimate {
+        run_estimate(state, &mut draft, Some(index));
     }
-    ui.separator();
-    ui.heading("3. Refunds and adjustments");
-    let mut remove_refund = None;
-    for (index, refund) in draft.refunds.iter_mut().enumerate() {
-        egui::CollapsingHeader::new(format!("Refund {} · {}", index + 1, refund.name))
-            .default_open(true)
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Name");
-                    ui.text_edit_singleline(&mut refund.name);
+    ui.add_space(6.0);
+    egui::CollapsingHeader::new(format!(
+        "Refunds and adjustments ({})",
+        draft.refunds.len() + draft.unallocated_adjustments.len()
+    ))
+    .id_salt("refunds_and_adjustments")
+    .default_open(!draft.refunds.is_empty() || !draft.unallocated_adjustments.is_empty())
+    .show(ui, |ui| {
+        let mut remove_refund = None;
+        for (index, refund) in draft.refunds.iter_mut().enumerate() {
+            card(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new(format!("Refund {}", index + 1)).strong());
+                    ui.add(
+                        egui::TextEdit::singleline(&mut refund.name)
+                            .desired_width(180.0)
+                            .hint_text("Item name"),
+                    );
+                    category_picker(ui, ("refund_category", index), &mut refund.category);
+                    ui.label("Amount");
+                    money_field(ui, &mut refund.amount_cents);
+                    if ui.small_button("Remove").clicked() {
+                        remove_refund = Some(index);
+                    }
                 });
-                ui.horizontal(|ui| {
-                    ui.label("Category");
-                    ui.text_edit_singleline(&mut refund.category);
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("Qty");
+                    text_field(ui, &mut refund.quantity, 56.0, "1");
+                    ui.label("Unit");
+                    text_field(ui, &mut refund.unit, 64.0, "each");
+                    ui.label("Original line ID");
+                    text_field(ui, &mut refund.original_line_id, 120.0, "optional");
+                    ui.label("Take back from stock");
+                    text_field(ui, &mut refund.inventory_quantity_to_reverse, 56.0, "0");
                 });
-                option_text(ui, "Refunded quantity", &mut refund.quantity);
-                option_text(ui, "Unit", &mut refund.unit);
-                ui.horizontal(|ui| {
-                    ui.label("Amount cents (negative)");
-                    ui.add(egui::DragValue::new(&mut refund.amount_cents));
-                });
-                option_text(
-                    ui,
-                    "Original lot ID (optional)",
-                    &mut refund.original_line_id,
-                );
-                option_text(
-                    ui,
-                    "Stock quantity to reverse",
-                    &mut refund.inventory_quantity_to_reverse,
-                );
-                if ui.button("Remove refund").clicked() {
-                    remove_refund = Some(index);
+            });
+        }
+        if let Some(index) = remove_refund {
+            draft.refunds.remove(index);
+        }
+        if ui.button("Add refund").clicked() {
+            draft.refunds.push(RefundLine {
+                name: String::new(),
+                category: "food.pantry".into(),
+                quantity: Some("1".into()),
+                unit: Some("each".into()),
+                amount_cents: -1,
+                original_line_id: None,
+                inventory_quantity_to_reverse: None,
+            });
+        }
+        ui.separator();
+        ui.label("Adjustments the scanner could not attach to a line:");
+        let mut remove_adjustment = None;
+        for (index, line) in draft.unallocated_adjustments.iter_mut().enumerate() {
+            ui.horizontal(|ui| {
+                ui.text_edit_singleline(line);
+                if ui.small_button("Remove").clicked() {
+                    remove_adjustment = Some(index);
                 }
             });
-    }
-    if let Some(index) = remove_refund {
-        draft.refunds.remove(index);
-    }
-    if ui.button("Add refund").clicked() {
-        draft.refunds.push(RefundLine {
-            name: String::new(),
-            category: "food.pantry".into(),
-            quantity: Some("1".into()),
-            unit: Some("each".into()),
-            amount_cents: -1,
-            original_line_id: None,
-            inventory_quantity_to_reverse: None,
-        });
-    }
-    ui.separator();
-    ui.label("Unassigned source adjustments (review, edit, or remove false positives):");
-    let mut remove_adjustment = None;
-    for (index, line) in draft.unallocated_adjustments.iter_mut().enumerate() {
-        ui.horizontal(|ui| {
-            ui.text_edit_singleline(line);
-            if ui.button("Remove").clicked() {
-                remove_adjustment = Some(index);
-            }
-        });
-    }
-    if let Some(index) = remove_adjustment {
-        draft.unallocated_adjustments.remove(index);
-    }
-    if ui.button("Add adjustment note").clicked() {
-        draft.unallocated_adjustments.push(String::new());
-    }
-    option_cents(
-        ui,
-        "Explicit unallocated reconciliation",
-        &mut draft.unallocated_cents,
-    );
-    ui.checkbox(
-        &mut draft.accepted_unknowns,
-        "Accept unknown item costs with explicit reconciliation",
-    );
-    let valid = review(draft.clone()).is_ok();
-    if valid {
-        ui.colored_label(egui::Color32::from_rgb(16, 112, 100), "Ready to confirm. Inventory and spending will update only when you choose a confirmation action.");
-    } else {
-        ui.colored_label(
-            egui::Color32::from_rgb(160, 96, 30),
-            "Needs correction: item fields, refund limits, subtotal and total must reconcile.",
+        }
+        if let Some(index) = remove_adjustment {
+            draft.unallocated_adjustments.remove(index);
+        }
+        if ui.button("Add adjustment note").clicked() {
+            draft.unallocated_adjustments.push(String::new());
+        }
+        optional_money(ui, "Reconciliation", &mut draft.unallocated_cents);
+        ui.checkbox(
+            &mut draft.accepted_unknowns,
+            "Accept unknown item prices, balanced by the reconciliation amount",
         );
-    }
-    ui.heading("4. Confirm your review");
+    });
+    ui.add_space(10.0);
+    let problems = crate::review_hints::receipt_problems(&draft);
+    let valid = review(draft.clone()).is_ok();
+    let unchecked = draft.items.iter().filter(|item| !item.reviewed).count();
+    let ready = valid && unchecked == 0;
     let mut confirmed = false;
-    ui.horizontal(|ui| {
-        if ui
-            .add_enabled(valid, egui::Button::new("Confirm new receipt"))
-            .clicked()
-        {
-            state.draft = Some(draft.clone());
-            match state.dispatch(AppAction::Commit(ReceiptCommit::New)) {
-                Ok(()) => confirmed = true,
-                Err(error) => state.message = error,
+    card(ui, |ui| {
+        ui.label(RichText::new("Confirm").strong().size(17.0));
+        if ready {
+            ui.colored_label(
+                ACCENT,
+                "Everything reconciles and every line is checked. Confirming adds the food to your kitchen and the spending to your history.",
+            );
+        } else {
+            for problem in &problems {
+                ui.colored_label(WARN, format!("• {problem}"));
+            }
+            if !valid && problems.is_empty() {
+                ui.colored_label(WARN, "• Fix the lines marked in amber above.");
+            }
+            if unchecked > 0 {
+                ui.colored_label(
+                    WARN,
+                    format!("• Tick each line after checking it ({unchecked} left)."),
+                );
             }
         }
-        if state.source_match.is_some()
-            && ui
+        ui.horizontal_wrapped(|ui| {
+            if ui
                 .add_enabled(
-                    valid && state.separate_ack,
-                    egui::Button::new("Confirm separate purchase"),
+                    ready,
+                    egui::Button::new("Confirm receipt").fill(ACCENT_BUTTON),
                 )
                 .clicked()
-        {
-            state.draft = Some(draft.clone());
-            match state.dispatch(AppAction::Commit(ReceiptCommit::Separate)) {
-                Ok(()) => confirmed = true,
-                Err(error) => state.message = error,
+            {
+                state.draft = Some(draft.clone());
+                match state.dispatch(AppAction::Commit(ReceiptCommit::New)) {
+                    Ok(()) => confirmed = true,
+                    Err(error) => state.message = error,
+                }
             }
-        }
-        if ui
-            .add_enabled(valid, egui::Button::new("Correct existing receipt"))
-            .clicked()
-        {
-            state.draft = Some(draft.clone());
-            match state.dispatch(AppAction::Commit(ReceiptCommit::Correct)) {
-                Ok(()) => confirmed = true,
-                Err(error) => state.message = error,
+            if state.source_match.is_some()
+                && ui
+                    .add_enabled(
+                        ready && state.separate_ack,
+                        egui::Button::new("Confirm as separate purchase"),
+                    )
+                    .clicked()
+            {
+                state.draft = Some(draft.clone());
+                match state.dispatch(AppAction::Commit(ReceiptCommit::Separate)) {
+                    Ok(()) => confirmed = true,
+                    Err(error) => state.message = error,
+                }
             }
-        }
+            if ui
+                .add_enabled(ready, egui::Button::new("Replace saved receipt with this"))
+                .on_hover_text("Corrects a receipt you saved earlier with the same ID")
+                .clicked()
+            {
+                state.draft = Some(draft.clone());
+                match state.dispatch(AppAction::Commit(ReceiptCommit::Correct)) {
+                    Ok(()) => confirmed = true,
+                    Err(error) => state.message = error,
+                }
+            }
+        });
     });
-    if confirmed {
-        state.clear_receipt();
-    } else {
+    if !confirmed {
         state.draft = Some(draft);
     }
 }
