@@ -119,18 +119,18 @@ A platform is listed as **supported** only after hosted CI has built and tested 
 
 | Platform | Status |
 | --- | --- |
-| Windows (x86_64) | Builds, `cargo clippy -D warnings` and `cargo test --workspace` (117 tests) pass locally on one Windows 11 PC; the release app rendered Light and Dark synthetic captures there. Cross-platform CI has not run yet. |
-| Linux (x86_64) | Not yet built in CI. Portable code paths (XDG data dir, portal theme, Noto/DejaVu fonts) are in place but unverified. |
-| macOS | Not yet built in CI. Portable code paths (Application Support data dir, Arial UI font) are in place but unverified. |
+| Windows (x86_64) | **Supported.** Hosted CI on `windows-latest` built the workspace and passed `cargo fmt --check` and `cargo test --workspace` (117 passed, 0 failed) at `902c7d8`: [run 39163613317](https://github.com/Gerbzz/HungerStrike/actions/runs/39163613317). Clippy `-D warnings`, the release build and Light/Dark synthetic captures passed locally on one Windows 11 PC (not yet in hosted CI). |
+| Linux (x86_64) | **Not yet built in CI; not hands-on tested.** Portable code paths (XDG data dir, portal theme, Noto/DejaVu fonts) are in place but unverified. |
+| macOS | **Not yet built in CI; not hands-on tested.** Portable code paths (Application Support data dir, Arial UI font) are in place but unverified. |
 | Android, iOS | Not claimed. See *Implemented vs planned*. |
 
-The [Cross-platform workflow](.github/workflows/cross-platform.yml) runs rustfmt, clippy `-D warnings`, `cargo test --workspace`, a release build and a headless synthetic capture on `windows-latest`, `ubuntu-latest` and `macos-latest`, and uploads the binaries and screenshots as artifacts. Hands-on use (mouse, keyboard, file dialogs, live theme switching) has not been tested on Linux or macOS.
+A Cross-platform workflow (rustfmt, clippy `-D warnings`, `cargo test --workspace`, a release build and a headless synthetic capture on `windows-latest`, `ubuntu-latest` and `macos-latest`, with binaries and screenshots uploaded as artifacts) has been written but not yet pushed, so Linux and macOS have no CI results. Hands-on use (mouse, keyboard, file dialogs, live theme switching) has not been tested on Linux or macOS.
 
 ## Verification status
 
 See [verification.md](verification.md) for the dated record. In short, for this branch:
 
-- **Tests:** `cargo fmt --all --check` and `cargo test --workspace` pass locally (113 tests: 78 core, 35 desktop, at `6da6e66`); hosted Windows CI passed at an earlier commit. They cover theme resolution, persistence and AA contrast, receipts, ledger, budgets, backups, recipes, database recovery, expiry estimates, bundled OCR on synthetic images, corrupt images, cancellation, timeout, per-line review gating, duplicate photo imports and app actions.
+- **Tests:** `cargo fmt --all --check` and `cargo test --workspace` pass (117 tests: 78 core, 39 desktop) locally and in hosted Windows CI at `902c7d8` ([run 39163613317](https://github.com/Gerbzz/HungerStrike/actions/runs/39163613317)). They cover theme resolution, persistence and AA contrast, receipts, ledger, budgets, backups, recipes, database recovery, expiry estimates, bundled OCR on synthetic images, corrupt images, cancellation, timeout, per-line review gating, duplicate photo imports and app actions.
 - **App-rendered frames:** the built app produced the [frames listed here](docs/CAPTURE_2026-10-17.md), including a real OCR draft from a synthetic photo, reopening a saved profile, and recovery from a corrupted database file.
 - **Clippy:** `cargo clippy --workspace --all-targets -- -D warnings` passes.
 - **Not verified:** native mouse/keyboard click-through, the file dialog and 3D picking on this build (computer-use access to the app window was denied); real receipts; other PCs, GPUs and DPI settings; screen readers.

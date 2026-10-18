@@ -1,5 +1,13 @@
 # HungerStrike verification
 
+## 2026-10-18 · cross-platform preparation (branch `hungerstrike-cross-platform`)
+
+| Check | Result |
+| --- | --- |
+| Local (Windows 11) | Before Smart App Control blocked further local builds: `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` **117 passed, 0 failed** (78 core, 39 desktop incl. 4 new platform tests); release build rendered Light and Dark `selected` synthetic captures with `HUNGERSTRIKE_CAPTURE_EXIT=1` and no WARN/ERROR lines. After that, per the user's decision to keep SAC on, no further local builds were run. |
+| Hosted Windows CI | Existing "Pantry recommendations" workflow on PR #9 at `902c7d8`: fmt, `cargo test --workspace` (117 passed) and debug build **passed**, [run 39163613317](https://github.com/Gerbzz/HungerStrike/actions/runs/39163613317). |
+| Linux, macOS | **Not built or tested.** The cross-platform matrix workflow could not be pushed: the token lacks the `workflow` scope. |
+
 ## 2026-10-18 · themes (`976a297`, `6da6e66`, `a9cedd3`)
 
 | Check | Result |
