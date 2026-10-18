@@ -1,11 +1,12 @@
 mod ocr;
+mod platform;
 mod review_hints;
 mod scene;
 mod theme;
 mod ui;
 
 use bevy::prelude::*;
-use bevy::render::view::screenshot::{save_to_disk, Screenshot};
+use bevy::render::view::screenshot::{save_to_disk, Screenshot, ScreenshotCaptured};
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
 use hungerstrike_core::{
     add_recipe_missing_to_shopping, add_recipes_missing_to_shopping, apply_import, budget_view,
@@ -524,17 +525,23 @@ fn seed_unknown_visual_capture(state: &mut AppState) -> Result<(), String> {
     Ok(())
 }
 
-fn data_path() -> PathBuf {
-    let directory = std::env::var_os("HUNGERSTRIKE_DATA_DIR")
-        .or_else(|| std::env::var_os("LOCALAPPDATA"))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
-    directory.join("HungerStrike").join("inventory.sqlite")
-}
-
 fn main() {
-    let path = data_path();
+    let path = platform::data_path();
     std::fs::create_dir_all(path.parent().expect("data folder")).expect("create local data folder");
+    // Earlier macOS/Linux builds kept data under the working directory. Copy
+    // it to the per-OS location once; the original files are left in place.
+    let migrated_from = platform::legacy_data_path().filter(|legacy| {
+        match platform::migrate_legacy_data(legacy, &path) {
+            Ok(copied) => copied,
+            Err(error) => {
+                eprintln!(
+                    "HungerStrike: could not copy earlier data from {}: {error}",
+                    legacy.display()
+                );
+                false
+            }
+        }
+    });
     let (store, recovery) = match Store::open_or_recover(&path) {
         Ok(opened) => opened,
         Err(error) => {
@@ -561,6 +568,13 @@ fn main() {
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_default()
+        );
+    }
+    if let Some(legacy) = migrated_from {
+        state.message = format!(
+            "Your kitchen was copied from {} to {}. The original files were left where they were.",
+            legacy.display(),
+            path.display()
         );
     }
     state.hold_launch_for_capture = demo.as_deref() == Some("launch");
@@ -736,6 +750,7 @@ fn main() {
                 .expect("executable directory")
                 .join("assets")
         });
+    platform::start_system_theme_watch();
     App::new()
         .insert_resource(state)
         .add_plugins((
@@ -786,7 +801,11 @@ fn sync_system_theme(
     mut state: ResMut<AppState>,
 ) {
     let mut system_dark = state.system_dark;
-    if system_dark.is_none() {
+    if let Some(dark) = platform::portal_system_dark() {
+        // Linux: the desktop portal reports the colour scheme that winit
+        // does not expose on X11.
+        system_dark = Some(dark);
+    } else if system_dark.is_none() {
         if let Some(theme) = windows.iter().next().and_then(|window| window.window_theme) {
             system_dark = Some(theme == bevy::window::WindowTheme::Dark);
         }
@@ -825,8 +844,17 @@ fn capture_once(
     if let Some(path) = std::env::var_os("HUNGERSTRIKE_CAPTURE_PATH") {
         commands
             .spawn(Screenshot::primary_window())
-            .observe(save_to_disk(PathBuf::from(path)));
+            .observe(save_to_disk(PathBuf::from(path)))
+            .observe(exit_after_capture);
         *captured = true;
+    }
+}
+
+/// With `HUNGERSTRIKE_CAPTURE_EXIT=1`, quit once the capture has been written
+/// (the save observer writes the file synchronously). Used by headless CI.
+fn exit_after_capture(_captured: On<ScreenshotCaptured>, mut exit: MessageWriter<AppExit>) {
+    if std::env::var("HUNGERSTRIKE_CAPTURE_EXIT").as_deref() == Ok("1") {
+        exit.write(AppExit::Success);
     }
 }
 

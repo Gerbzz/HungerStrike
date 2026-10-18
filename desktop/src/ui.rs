@@ -298,17 +298,11 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
             "PWDS original mark",
             include_bytes!("../../assets/branding/PWDS-logo.png"),
         );
-        // Use the installed Windows UI face when present; retain egui's bundled
-        // fallback fonts on other platforms. No font bytes are redistributed.
-        let font_root = std::env::var_os("WINDIR")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows"))
-            .join("Fonts");
+        // Use an installed system UI face (Segoe UI on Windows, Arial on
+        // macOS, Noto Sans or DejaVu Sans on Linux) when present; egui's
+        // bundled fonts stay as the fallback. No font bytes are redistributed.
         let mut heading_family = egui::FontFamily::Proportional;
-        if let (Ok(regular), Ok(medium)) = (
-            std::fs::read(font_root.join("segoeui.ttf")),
-            std::fs::read(font_root.join("seguisb.ttf")),
-        ) {
+        if let Some((regular, medium)) = crate::platform::load_ui_fonts() {
             let mut fonts = egui::FontDefinitions::default();
             fonts.font_data.insert(
                 "System Sans".into(),
@@ -2359,7 +2353,9 @@ fn theme_picker(ui: &mut egui::Ui, state: &mut AppState) {
             let hint = match pref {
                 crate::theme::ThemePref::Light => "The original HungerStrike look (default)",
                 crate::theme::ThemePref::Dark => "Dark panels and an evening kitchen",
-                crate::theme::ThemePref::System => "Follow the Windows app theme",
+                crate::theme::ThemePref::System => {
+                    "Follow the operating system's light or dark setting"
+                }
             };
             if ui.add(button).on_hover_text(hint).clicked() && !selected {
                 chosen = Some(pref);
@@ -2378,7 +2374,7 @@ fn data(ui: &mut egui::Ui, state: &mut AppState) {
     card(ui, |ui| {
         ui.label(RichText::new("Theme").strong().size(17.0));
         ui.label(
-            RichText::new("Light is the default. System follows the Windows app theme. Saved on this computer.")
+            RichText::new("Light is the default. System follows your operating system's light or dark setting. Saved on this computer.")
                 .size(13.0)
                 .color(t(MUTED)),
         );
