@@ -1,5 +1,17 @@
 # HungerStrike verification
 
+## 2026-10-18 · themes (`976a297`, `6da6e66`, `a9cedd3`)
+
+| Check | Result |
+| --- | --- |
+| Formatting | `cargo fmt --all --check` passed. |
+| Clippy | `cargo clippy --workspace --all-targets -- -D warnings` **passed** at `a9cedd3` (Smart App Control allowed it this time; seven older lints were fixed or annotated in `6da6e66`). |
+| Tests at `6da6e66` | `cargo test --workspace`: **113 passed, 0 failed** (core 78 incl. 2 new settings tests; desktop 35 incl. theme resolution, stored values, unchanged light colours, WCAG AA contrast of dark colours, scene room values, and an app test that switching applies immediately, persists across reopen and follows the OS for System). |
+| Tests at `a9cedd3` | Core 78 passed. The desktop test executable was **blocked by Smart App Control** ("An Application Control policy has blocked this file", os error 4551; Code Integrity event 3077). Not worked around; the PR's hosted CI run covers this commit. The change was a label string and a widget ID salt. |
+| Theme frames | Light and Dark frames of kitchen, receipt review, spending and Data from the `6da6e66` exe: [docs/CAPTURE_2026-10-18_THEMES.md](docs/CAPTURE_2026-10-18_THEMES.md). The light receipt-review and spending frames are byte-identical to the pre-theme `7222c4b` frames. |
+| System theme | The resolution logic is unit-tested; following a live Windows theme change was not exercised on screen. |
+
+
 ## 2026-10-17 · branch `hungerstrike-finish`
 
 Built on `main` at `fc5e8a2` with PR #3 and #4 (`6d0bf4b` … `535afd0`, merged as `030bf1b`) and PR #5 (`40bd235`, `09c4ec8`, merged as `a93ef58`). The `verification/hungerstrike-batch-capture-2026-10-16` branch adds only hosted-capture workflow probes on top of #3 and was not merged. `android-preview` (`df5b866`, 34 commits behind) restructures the desktop crate for an Android NativeActivity; it was inspected but not merged.

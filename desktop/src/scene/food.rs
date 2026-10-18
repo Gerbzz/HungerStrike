@@ -88,6 +88,7 @@ fn box_piece(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cylinder_piece(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
@@ -109,6 +110,7 @@ fn cylinder_piece(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn sphere_piece(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
@@ -130,6 +132,7 @@ fn sphere_piece(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn spawn_lot(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,

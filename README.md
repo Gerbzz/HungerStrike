@@ -21,13 +21,23 @@
 
 HungerStrike scans grocery receipts on your own computer, lets you check and correct every line, keeps track of what is in the fridge, freezer and pantry, puts the food that needs using first at the top, suggests recipes from what you have, builds a shopping list for what you are missing, and shows what you spend on food. Everything is stored locally in SQLite.
 
-<p align="center"><img src="assets/screenshots/hungerstrike-selected-7222c4b-1440x900.png" alt="HungerStrike Kitchen with synthetic stock, a selected lot, the expiry editor and the Use first list" width="860"></p>
-<p align="center"><sub>App-rendered frame from source <code>7222c4b</code> with synthetic test data. <a href="docs/CAPTURE_2026-10-17.md">All frames and their provenance</a>.</sub></p>
+<p align="center">
+  <img src="assets/screenshots/hungerstrike-selected-light-6da6e66-1440x900.png" alt="Kitchen in the default Light theme with synthetic stock, a selected lot, the expiry editor and the Use first list" width="420">
+  <img src="assets/screenshots/hungerstrike-selected-dark-6da6e66-1440x900.png" alt="Kitchen in the Dark theme: dark panels and an evening kitchen scene" width="420">
+</p>
+<p align="center"><sub><b>Kitchen</b>: left Light (default), right Dark.</sub></p>
 
 <p align="center">
-  <img src="assets/screenshots/hungerstrike-receipt-photo-7222c4b-1440x900.png" alt="Receipt review draft produced by the bundled OCR from a synthetic labelled photo" width="420">
-  <img src="assets/screenshots/hungerstrike-plan-next-7222c4b-1440x900.png" alt="Meals Plan next view with ranked recipes and missing groceries" width="420">
+  <img src="assets/screenshots/hungerstrike-receipt-photo-light-6da6e66-1440x900.png" alt="Receipt review in Light: draft produced by the bundled OCR from a synthetic labelled photo" width="420">
+  <img src="assets/screenshots/hungerstrike-receipt-photo-dark-6da6e66-1440x900.png" alt="Receipt review in Dark" width="420">
 </p>
+<p align="center"><sub><b>Receipt review</b> of the synthetic photo: left Light, right Dark.</sub></p>
+
+<p align="center">
+  <img src="assets/screenshots/hungerstrike-spending-light-6da6e66-1440x900.png" alt="Spending and budgets in Light" width="420">
+  <img src="assets/screenshots/hungerstrike-spending-dark-6da6e66-1440x900.png" alt="Spending and budgets in Dark" width="420">
+</p>
+<p align="center"><sub><b>Spending</b>: left Light, right Dark. App-rendered frames from source <code>6da6e66</code>, synthetic test data; the small red "widget ID" debug overlay was fixed afterwards. Provenance: <a href="docs/CAPTURE_2026-10-18_THEMES.md">theme captures</a>, <a href="docs/CAPTURE_2026-10-17.md">earlier captures</a> (OCR, reopen, database recovery, meals).</sub></p>
 
 ## What works today
 
@@ -39,6 +49,7 @@ HungerStrike scans grocery receipts on your own computer, lets you check and cor
 | **Meals** | Ten bundled original recipes. *Cook now* uses stock you have; *Use soon* prefers recipes that use dated stock; *Plan next* ranks recipes by how few ingredients are missing. Cooking previews the exact lots before stock changes. Missing ingredients for one or several selected meals can be added to a combined local shopping list. |
 | **Spending** | Cash paid, food vs household allocations, refunds, consumed and discarded food cost, with weekly and monthly budgets. |
 | **Data** | Export a JSON backup, preview an import, replace or reconcile, and undo the last replacement. If the local database is ever unreadable it is renamed aside (never deleted) and a fresh one is started, with a message saying where the old file is. |
+| **Theme** | Light (the original look, default), Dark, or System (follows the Windows app theme). Set it on the Data tab; it applies immediately and is saved with your local data. Dark keeps the teal accent family with colours checked for WCAG AA contrast, and switches the 3D kitchen to an evening look. |
 
 ## How receipt scanning works
 
@@ -85,9 +96,10 @@ For isolated, clearly labelled synthetic captures, set `HUNGERSTRIKE_CAPTURE_DEM
 
 See [verification.md](verification.md) for the dated record. In short, for this branch:
 
-- **Tests:** `cargo fmt --all --check` and `cargo test --workspace` pass locally (103 tests: 76 core, 27 desktop) and in hosted Windows CI. They cover receipts, ledger, budgets, backups, recipes, database recovery, expiry estimates, bundled OCR on synthetic images, corrupt images, cancellation, timeout, per-line review gating, duplicate photo imports and app actions.
+- **Tests:** `cargo fmt --all --check` and `cargo test --workspace` pass locally (113 tests: 78 core, 35 desktop, at `6da6e66`); hosted Windows CI passed at an earlier commit. They cover theme resolution, persistence and AA contrast, receipts, ledger, budgets, backups, recipes, database recovery, expiry estimates, bundled OCR on synthetic images, corrupt images, cancellation, timeout, per-line review gating, duplicate photo imports and app actions.
 - **App-rendered frames:** the built app produced the [frames listed here](docs/CAPTURE_2026-10-17.md), including a real OCR draft from a synthetic photo, reopening a saved profile, and recovery from a corrupted database file.
-- **Not verified:** native mouse/keyboard click-through, the file dialog and 3D picking on this build (computer-use access to the app window was denied); `cargo clippy` for the desktop crate (Windows Smart App Control blocked a build-time library, see verification.md); real receipts; other PCs, GPUs and DPI settings; screen readers.
+- **Clippy:** `cargo clippy --workspace --all-targets -- -D warnings` passes.
+- **Not verified:** native mouse/keyboard click-through, the file dialog and 3D picking on this build (computer-use access to the app window was denied); real receipts; other PCs, GPUs and DPI settings; screen readers.
 
 ## Data and privacy
 

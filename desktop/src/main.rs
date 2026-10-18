@@ -1,6 +1,7 @@
 mod ocr;
 mod review_hints;
 mod scene;
+mod theme;
 mod ui;
 
 use bevy::prelude::*;
@@ -11,8 +12,8 @@ use hungerstrike_core::{
     confirm_receipt, confirm_separate_purchase, cook_recipe, correct_receipt, estimate_expiry,
     export_backup, matching_source_receipt, parse_text, parse_user_date, preview_import,
     record_inventory_action, remove_shopping_item, restore_last_import, review, set_budget,
-    snapshot, AppSnapshot, ImportPreview, InventoryAction, Period, ReceiptDraft, Recipe,
-    RecipeCollection, ReplaceOrReconcile, Store,
+    set_ui_theme, snapshot, ui_theme, AppSnapshot, ImportPreview, InventoryAction, Period,
+    ReceiptDraft, Recipe, RecipeCollection, ReplaceOrReconcile, Store,
 };
 use std::{
     collections::HashSet,
@@ -68,6 +69,7 @@ enum AppAction {
     PreviewBackup(Vec<u8>),
     ApplyBackup(ReplaceOrReconcile),
     UndoBackup,
+    SetTheme(theme::ThemePref),
 }
 
 struct OcrTask {
@@ -89,6 +91,14 @@ struct AppState {
     expiry_text: String,
     /// Set for the isolated synthetic capture routes; shows a persistent label.
     synthetic_banner: bool,
+    /// Saved theme choice (Light by default).
+    theme_pref: theme::ThemePref,
+    /// Operating-system preference reported by the window system, if any.
+    system_dark: Option<bool>,
+    /// Theme in effect this frame.
+    dark: bool,
+    /// Theme the egui style was last built for.
+    applied_dark: Option<bool>,
     category: String,
     reference_date: String,
     week_start: u8,
@@ -122,6 +132,7 @@ impl AppState {
             .ok()
             .and_then(|view| view.budget_cents)
             .unwrap_or(0);
+        let theme_pref = theme::ThemePref::parse(ui_theme(&store)?.as_deref());
         let monthly_budget = budget_view(&store, &today, Period::Month, 0)
             .ok()
             .and_then(|view| view.budget_cents)
@@ -138,6 +149,10 @@ impl AppState {
             quantity: "1".into(),
             expiry_text: String::new(),
             synthetic_banner: false,
+            theme_pref,
+            system_dark: None,
+            dark: theme::resolve_dark(theme_pref, None),
+            applied_dark: None,
             category: String::new(),
             reference_date: today,
             week_start: 0,
@@ -224,6 +239,15 @@ impl AppState {
     /// Mark every purchase line in the draft as checked. The review screen
     /// does this one line at a time; synthetic capture routes and tests call
     /// it to stand in for the person doing the review.
+    /// Recompute the theme in effect from the saved choice and the OS.
+    fn update_theme(&mut self) {
+        let dark = theme::resolve_dark(self.theme_pref, self.system_dark);
+        if dark != self.dark {
+            self.dark = dark;
+            self.scene_dirty = true;
+        }
+    }
+
     fn mark_all_reviewed(&mut self) {
         if let Some(draft) = self.draft.as_mut() {
             for item in &mut draft.items {
@@ -443,6 +467,15 @@ impl AppState {
                 self.backup_preview = None;
                 self.message = format!("Backup: {result:?}");
             }
+            AppAction::SetTheme(pref) => {
+                {
+                    let mut store = self.store.lock().map_err(|e| e.to_string())?;
+                    set_ui_theme(&mut store, pref.as_str())?;
+                }
+                self.theme_pref = pref;
+                self.update_theme();
+                self.message = format!("Theme set to {}.", pref.label());
+            }
             AppAction::UndoBackup => {
                 {
                     let mut store = self.store.lock().map_err(|e| e.to_string())?;
@@ -532,6 +565,11 @@ fn main() {
     }
     state.hold_launch_for_capture = demo.as_deref() == Some("launch");
     state.synthetic_banner = demo.is_some();
+    // Capture routes can preview a theme without saving it.
+    if let Ok(theme) = std::env::var("HUNGERSTRIKE_CAPTURE_THEME") {
+        state.theme_pref = theme::ThemePref::parse(Some(theme.as_str()));
+        state.update_theme();
+    }
     if demo.as_deref() == Some("receipt-photo") {
         // Runs the bundled OCR on the SYNTHETIC labelled photo fixture; the
         // draft is shown for review and nothing is written.
@@ -569,6 +607,7 @@ fn main() {
                 | "plan-next"
                 | "plan-added"
                 | "cooked"
+                | "data"
         )
     ) {
         state.raw_text =
@@ -634,6 +673,7 @@ fn main() {
         let tab = match demo.as_deref() {
             Some("meals" | "plan-next" | "plan-added") => Tab::Meals,
             Some("spending") => Tab::Spending,
+            Some("data") => Tab::Data,
             _ => Tab::Kitchen,
         };
         state
@@ -725,6 +765,8 @@ fn main() {
         .add_systems(
             Update,
             (
+                sync_system_theme,
+                scene::apply_scene_theme,
                 scene::camera_controls,
                 scene::sync_visuals,
                 scene::animate_visuals,
@@ -736,7 +778,30 @@ fn main() {
         .run();
 }
 
+/// Track the operating-system theme: bevy records it on the primary window
+/// when the window is created and sends a message when it changes.
+fn sync_system_theme(
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    mut changes: MessageReader<bevy::window::WindowThemeChanged>,
+    mut state: ResMut<AppState>,
+) {
+    let mut system_dark = state.system_dark;
+    if system_dark.is_none() {
+        if let Some(theme) = windows.iter().next().and_then(|window| window.window_theme) {
+            system_dark = Some(theme == bevy::window::WindowTheme::Dark);
+        }
+    }
+    for change in changes.read() {
+        system_dark = Some(change.theme == bevy::window::WindowTheme::Dark);
+    }
+    if system_dark != state.system_dark {
+        state.system_dark = system_dark;
+        state.update_theme();
+    }
+}
+
 fn draw_ui(mut contexts: EguiContexts, mut state: ResMut<AppState>) -> Result {
+    state.update_theme();
     state.poll_ocr();
     ui::draw(contexts.ctx_mut()?, &mut state);
     Ok(())
@@ -1195,5 +1260,34 @@ mod tests {
             state.message,
             "Shopping list unchanged; any missing groceries are already listed."
         );
+    }
+
+    #[test]
+    fn theme_choice_applies_immediately_persists_and_follows_system() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("inventory.sqlite");
+        {
+            let mut state =
+                AppState::new(Store::open(&path).unwrap(), "2026-10-18".into()).unwrap();
+            assert_eq!(state.theme_pref, theme::ThemePref::Light);
+            assert!(!state.dark, "light is the default");
+            state.system_dark = Some(true);
+            state.update_theme();
+            assert!(!state.dark, "Light ignores the system preference");
+            state
+                .dispatch(AppAction::SetTheme(theme::ThemePref::Dark))
+                .unwrap();
+            assert!(state.dark, "switching applies without a restart");
+            state
+                .dispatch(AppAction::SetTheme(theme::ThemePref::System))
+                .unwrap();
+            assert!(state.dark, "System follows a dark OS");
+            state.system_dark = Some(false);
+            state.update_theme();
+            assert!(!state.dark, "System follows a light OS");
+        }
+        let reopened = AppState::new(Store::open(&path).unwrap(), "2026-10-18".into()).unwrap();
+        assert_eq!(reopened.theme_pref, theme::ThemePref::System);
+        assert!(!reopened.dark, "no OS report yet: System starts light");
     }
 }
