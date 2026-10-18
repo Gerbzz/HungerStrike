@@ -2316,7 +2316,7 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
                             }
                             dashboard_row(ui, "Remaining budget", view.remaining_budget_cents.map(money).unwrap_or_else(|| "not set".into()));
                             dashboard_row(ui, "Cash flow", money(view.cash_flow_cents));
-                            egui::CollapsingHeader::new("Full period breakdown")
+                            egui::CollapsingHeader::new("Full period breakdown").id_salt(("period_breakdown", label))
                                 .default_open(false)
                                 .show(ui, |ui| {
                                     dashboard_row(ui, "Food", money(view.food_spending_cents));
@@ -2482,7 +2482,7 @@ fn data(ui: &mut egui::Ui, state: &mut AppState) {
             ));
         }
     });
-    ui.label("Offline photo OCR requires a separately installed local Tesseract executable. Manual text entry always remains available.");
+    ui.label("Receipt photos are read on this computer by the bundled OCR engine. Typing or pasting receipt text always remains available.");
 }
 
 #[cfg(test)]
