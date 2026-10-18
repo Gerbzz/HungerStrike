@@ -15,6 +15,7 @@
   <a href="#how-receipt-scanning-works">Receipt scanning</a> ·
   <a href="#implemented-vs-planned">Implemented vs planned</a> ·
   <a href="#build-and-run">Build and run</a> ·
+  <a href="#platforms">Platforms</a> ·
   <a href="#verification-status">Verification</a> ·
   <a href="#credits-and-licenses">Credits</a>
 </p>
@@ -49,7 +50,7 @@ HungerStrike scans grocery receipts on your own computer, lets you check and cor
 | **Meals** | Ten bundled original recipes. *Cook now* uses stock you have; *Use soon* prefers recipes that use dated stock; *Plan next* ranks recipes by how few ingredients are missing. Cooking previews the exact lots before stock changes. Missing ingredients for one or several selected meals can be added to a combined local shopping list. |
 | **Spending** | Cash paid, food vs household allocations, refunds, consumed and discarded food cost, with weekly and monthly budgets. |
 | **Data** | Export a JSON backup, preview an import, replace or reconcile, and undo the last replacement. If the local database is ever unreadable it is renamed aside (never deleted) and a fresh one is started, with a message saying where the old file is. |
-| **Theme** | Light (the original look, default), Dark, or System (follows the Windows app theme). Set it on the Data tab; it applies immediately and is saved with your local data. Dark keeps the teal accent family with colours checked for WCAG AA contrast, and switches the 3D kitchen to an evening look. |
+| **Theme** | Light (the original look, default), Dark, or System (follows the operating system's light/dark setting: reported by the window system on Windows and macOS, read from the XDG desktop portal on Linux). Set it on the Data tab; it applies immediately and is saved with your local data. Dark keeps the teal accent family with colours checked for WCAG AA contrast, and switches the 3D kitchen to an evening look. |
 
 ## How receipt scanning works
 
@@ -75,22 +76,55 @@ OCR quality depends on the photo. The bundled engine reads the repository's labe
 | Virtual 3D kitchen | Implemented as an illustrative kitchen; it does not reconstruct a real kitchen from photos |
 | Camera capture | Planned (file import only today) |
 | Android | Planned. A stale [android-preview branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has a Bevy NativeActivity build that was run on an emulator in October; it is not merged and no Android support is claimed. The bundled OCR is pure Rust, so it does not block an Android port the way an external Tesseract did. |
-| iOS, macOS, Linux | Not built or tested |
+| Linux, macOS | Portable desktop code; see [Platforms](#platforms) for what CI has verified |
+| iOS | Not built or tested |
 | Installer / signed release | Not available |
 
 ## Build and run
 
-You need a stable Rust toolchain on Windows. From the repository root:
+You need a stable Rust toolchain ([rustup](https://rustup.rs)) plus the per-OS prerequisites below. SQLite and the OCR engine are compiled in, so nothing else needs installing.
 
-```powershell
+| OS | Build prerequisites |
+| --- | --- |
+| Windows 10/11 | Visual Studio Build Tools with the "Desktop development with C++" workload (MSVC and the Windows SDK). |
+| macOS | Xcode Command Line Tools (`xcode-select --install`). |
+| Linux (Debian/Ubuntu) | `sudo apt-get install pkg-config libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev` and a C compiler (`build-essential`). Running needs a Vulkan or OpenGL driver (Mesa is fine). The file picker and error dialogs use the XDG desktop portal (`xdg-desktop-portal` plus a backend such as `-gtk` or `-kde`), with `zenity` as the fallback; no GTK development headers are needed to build. Other distributions need the equivalent ALSA, udev, Wayland and xkbcommon development packages. |
+
+From the repository root:
+
+```sh
 cargo build --release -p hungerstrike-rust-desktop
-.\target\release\hungerstrike-rust-desktop.exe
 cargo test --workspace
+# Windows: .\target\release\hungerstrike-rust-desktop.exe
+# macOS / Linux: ./target/release/hungerstrike-rust-desktop
 ```
 
-The OCR crates are optimised even in debug builds (see `[profile.dev.package.*]` in `Cargo.toml`) so the tests run in seconds. Data lives at `%LOCALAPPDATA%\HungerStrike\inventory.sqlite`; set `HUNGERSTRIKE_DATA_DIR` to use a separate profile. See [launch notes](docs/launch.md) and the [workflow walkthrough](docs/workflow.md).
+The app loads its 3D models from an `assets` folder next to the executable; when running from `target/release`, set `HUNGERSTRIKE_ASSETS_DIR` to the repository's `assets` folder (the CI binary artifacts already include `assets/`).
 
-For isolated, clearly labelled synthetic captures, set `HUNGERSTRIKE_CAPTURE_DEMO` to one of `kitchen`, `selected`, `receipt`, `receipt-photo`, `plan-next`, `spending`, `about` or `launch`, plus `HUNGERSTRIKE_CAPTURE_PATH` (optionally `HUNGERSTRIKE_CAPTURE_SIZE` and `HUNGERSTRIKE_CAPTURE_DELAY`), and point `HUNGERSTRIKE_DATA_DIR` at a throwaway folder. These routes show a **SYNTHETIC TEST DATA** label.
+The OCR crates are optimised even in debug builds (see `[profile.dev.package.*]` in `Cargo.toml`) so the tests run in seconds. Set `HUNGERSTRIKE_DATA_DIR` to use a separate profile. Otherwise local data lives at:
+
+| OS | Data file |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\HungerStrike\inventory.sqlite` (unchanged from earlier builds) |
+| macOS | `~/Library/Application Support/HungerStrike/inventory.sqlite` |
+| Linux | `$XDG_DATA_HOME/HungerStrike/inventory.sqlite`, normally `~/.local/share/HungerStrike/inventory.sqlite` |
+
+Earlier macOS/Linux source builds wrote to `./HungerStrike/inventory.sqlite` under the working directory. On first start the app copies that database to the location above if nothing is there yet, and leaves the original in place. See [launch notes](docs/launch.md) and the [workflow walkthrough](docs/workflow.md).
+
+For isolated, clearly labelled synthetic captures, set `HUNGERSTRIKE_CAPTURE_DEMO` to one of `kitchen`, `selected`, `receipt`, `receipt-photo`, `plan-next`, `spending`, `about` or `launch`, plus `HUNGERSTRIKE_CAPTURE_PATH` (optionally `HUNGERSTRIKE_CAPTURE_SIZE`, `HUNGERSTRIKE_CAPTURE_DELAY`, `HUNGERSTRIKE_CAPTURE_THEME`, and `HUNGERSTRIKE_CAPTURE_EXIT=1` to quit once the image is written), and point `HUNGERSTRIKE_DATA_DIR` at a throwaway folder. These routes show a **SYNTHETIC TEST DATA** label.
+
+## Platforms
+
+A platform is listed as **supported** only after hosted CI has built and tested it there, with a link to the run. Anything less is labelled as such.
+
+| Platform | Status |
+| --- | --- |
+| Windows (x86_64) | Builds, `cargo clippy -D warnings` and `cargo test --workspace` (117 tests) pass locally on one Windows 11 PC; the release app rendered Light and Dark synthetic captures there. Cross-platform CI has not run yet. |
+| Linux (x86_64) | Not yet built in CI. Portable code paths (XDG data dir, portal theme, Noto/DejaVu fonts) are in place but unverified. |
+| macOS | Not yet built in CI. Portable code paths (Application Support data dir, Arial UI font) are in place but unverified. |
+| Android, iOS | Not claimed. See *Implemented vs planned*. |
+
+The [Cross-platform workflow](.github/workflows/cross-platform.yml) runs rustfmt, clippy `-D warnings`, `cargo test --workspace`, a release build and a headless synthetic capture on `windows-latest`, `ubuntu-latest` and `macos-latest`, and uploads the binaries and screenshots as artifacts. Hands-on use (mouse, keyboard, file dialogs, live theme switching) has not been tested on Linux or macOS.
 
 ## Verification status
 
