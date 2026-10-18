@@ -468,6 +468,8 @@ pub fn setup(
     commands.insert_resource(p);
 }
 
+// 3.14 below is a shelf height in metres, not an approximation of PI.
+#[allow(clippy::approx_constant)]
 fn build_fridge(commands: &mut Commands, meshes: &mut Assets<Mesh>, p: &Palette) {
     let x = FRIDGE_X;
     // The cabinet is a hollow, thick shell; shelf hardware and food remain visible.
@@ -1102,6 +1104,7 @@ pub fn camera_controls(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // Bevy system parameters
 pub fn sync_visuals(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -1185,6 +1188,114 @@ pub fn animate_visuals(time: Res<Time>, mut doors: Query<(&mut ZoneDoor, &mut Tr
                 transform.translation = door.closed + distance * door.progress;
             }
         }
+    }
+}
+
+/// Light (original) or dark room settings for the virtual kitchen.
+struct RoomLook {
+    clear: (f32, f32, f32),
+    floor: (f32, f32, f32),
+    wall: (f32, f32, f32),
+    tile: (f32, f32, f32),
+    liner: (f32, f32, f32),
+    counter: (f32, f32, f32),
+    ambient: (f32, f32, f32),
+    ambient_brightness: f32,
+    key_illuminance: f32,
+}
+
+const LIGHT_ROOM: RoomLook = RoomLook {
+    clear: (0.91, 0.93, 0.92),
+    floor: (0.80, 0.79, 0.75),
+    wall: (0.87, 0.89, 0.88),
+    tile: (0.74, 0.81, 0.81),
+    liner: (0.88, 0.93, 0.91),
+    counter: (0.90, 0.87, 0.79),
+    ambient: (0.92, 0.96, 1.0),
+    ambient_brightness: 82.0,
+    key_illuminance: 4_200.0,
+};
+
+/// An evening kitchen: darker room surfaces so the light appliances and the
+/// warm fridge interior stand out against the dark app panels.
+const DARK_ROOM: RoomLook = RoomLook {
+    clear: (0.075, 0.085, 0.092),
+    floor: (0.30, 0.29, 0.27),
+    wall: (0.20, 0.235, 0.245),
+    tile: (0.19, 0.29, 0.30),
+    liner: (0.28, 0.35, 0.35),
+    counter: (0.62, 0.58, 0.50),
+    ambient: (0.70, 0.80, 0.95),
+    ambient_brightness: 55.0,
+    key_illuminance: 3_400.0,
+};
+
+fn room_look(dark: bool) -> &'static RoomLook {
+    if dark {
+        &DARK_ROOM
+    } else {
+        &LIGHT_ROOM
+    }
+}
+
+/// Re-colour the room, background and lighting when the theme changes.
+pub fn apply_scene_theme(
+    state: Res<AppState>,
+    palette: Option<Res<Palette>>,
+    mut applied: Local<Option<bool>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut clear: ResMut<ClearColor>,
+    mut ambient: ResMut<GlobalAmbientLight>,
+    mut key_lights: Query<&mut DirectionalLight>,
+) {
+    let Some(palette) = palette else {
+        return;
+    };
+    if *applied == Some(state.dark) {
+        return;
+    }
+    let look = room_look(state.dark);
+    clear.0 = Color::srgb(look.clear.0, look.clear.1, look.clear.2);
+    ambient.color = Color::srgb(look.ambient.0, look.ambient.1, look.ambient.2);
+    ambient.brightness = look.ambient_brightness;
+    for mut light in &mut key_lights {
+        light.illuminance = look.key_illuminance;
+    }
+    for (handle, rgb) in [
+        (&palette.floor, look.floor),
+        (&palette.wall, look.wall),
+        (&palette.tile, look.tile),
+        (&palette.liner, look.liner),
+        (&palette.counter, look.counter),
+    ] {
+        if let Some(material) = materials.get_mut(handle) {
+            material.base_color = Color::srgb(rgb.0, rgb.1, rgb.2);
+        }
+    }
+    *applied = Some(state.dark);
+}
+
+#[cfg(test)]
+mod theme_tests {
+    use super::*;
+
+    #[test]
+    fn light_room_matches_the_original_scene_values() {
+        let look = room_look(false);
+        assert_eq!(look.clear, (0.91, 0.93, 0.92));
+        assert_eq!(look.floor, (0.80, 0.79, 0.75));
+        assert_eq!(look.ambient_brightness, 82.0);
+        assert_eq!(look.key_illuminance, 4_200.0);
+    }
+
+    #[test]
+    fn dark_room_is_darker_than_the_appliances() {
+        let look = room_look(true);
+        let brightness = |(r, g, b): (f32, f32, f32)| (r + g + b) / 3.0;
+        // Appliance enamel is ~0.89; the room must stay well below it.
+        assert!(brightness(look.clear) < 0.15);
+        assert!(brightness(look.wall) < 0.89 / 2.0);
+        assert!(brightness(look.floor) < 0.89 / 2.0);
     }
 }
 
