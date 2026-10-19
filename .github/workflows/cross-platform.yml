@@ -77,8 +77,22 @@ jobs:
           rm -rf dist/assets/screenshots
           (cd dist && ls -l)
 
-      - name: Headless app capture (synthetic data)
+      - name: Upload desktop binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: hungerstrike-desktop-${{ matrix.os }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+      # Required on Linux (Mesa lavapipe under Xvfb) and macOS (paravirtual
+      # Metal). Best-effort on Windows: the hosted runner only offers the WARP
+      # software D3D12 adapter, which removes the device (DXGI 0x887A0005)
+      # within seconds of opening the 3D scene, at 1440x900 and at 1000x700.
+      # A Windows failure here is reported as a warning, never as a capture.
+      - name: ${{ matrix.os == 'windows-latest' && 'Headless app capture (best-effort on WARP, not required)' || 'Headless app capture (synthetic data)' }}
         id: capture
+        continue-on-error: ${{ matrix.os == 'windows-latest' }}
         timeout-minutes: 10
         shell: bash
         env:
@@ -90,12 +104,9 @@ jobs:
         run: |
           mkdir -p captures
           bin=target/release/hungerstrike-rust-desktop
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            bin="$bin.exe"
-            # The runner only has the WARP software DX12 adapter, which lost
-            # the device at 1440x900 (DXGI 0x887A0005); render less per frame.
-            export HUNGERSTRIKE_CAPTURE_SIZE=1000x700 HUNGERSTRIKE_CAPTURE_DELAY=1
-          fi
+          [ "$RUNNER_OS" = "Windows" ] && bin="$bin.exe"
+          level=error
+          [ "$RUNNER_OS" = "Windows" ] && level=warning
           status=0
           for theme in light dark; do
             name="hungerstrike-${{ matrix.os }}-selected-$theme.png"
@@ -108,24 +119,21 @@ jobs:
             else
               "$bin" > "captures/$theme.log" 2>&1 || status=$?
             fi
-            tail -n 40 "captures/$theme.log"
-            if [ -s "captures/$name" ]; then echo "captured captures/$name"; else echo "::error::no capture written for $theme"; status=1; fi
+            grep -E 'AdapterInfo|ERROR|panicked|Screenshot saved' "captures/$theme.log" | head -n 20 || true
+            if [ -s "captures/$name" ]; then
+              echo "captured captures/$name"
+            else
+              echo "::$level::no $theme capture written on ${{ matrix.os }} (see captures/$theme.log in the screenshots artifact)"
+              status=1
+            fi
           done
           exit $status
 
-      - name: Upload screenshots
+      - name: Upload screenshots and capture logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: hungerstrike-screenshots-${{ matrix.os }}
           path: captures/
           if-no-files-found: warn
-          retention-days: 14
-
-      - name: Upload desktop binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: hungerstrike-desktop-${{ matrix.os }}
-          path: dist/
-          if-no-files-found: error
           retention-days: 14
