@@ -1,12 +1,16 @@
 # HungerStrike verification
 
-## 2026-10-18 · cross-platform preparation (branch `hungerstrike-cross-platform`)
+## 2026-10-18/19 · cross-platform (branch `hungerstrike-cross-platform`, PR #9)
 
 | Check | Result |
 | --- | --- |
-| Local (Windows 11) | Before Smart App Control blocked further local builds: `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` **117 passed, 0 failed** (78 core, 39 desktop incl. 4 new platform tests); release build rendered Light and Dark `selected` synthetic captures with `HUNGERSTRIKE_CAPTURE_EXIT=1` and no WARN/ERROR lines. After that, per the user's decision to keep SAC on, no further local builds were run. |
-| Hosted Windows CI | Existing "Pantry recommendations" workflow on PR #9 at `902c7d8`: fmt, `cargo test --workspace` (117 passed) and debug build **passed**, [run 39163613317](https://github.com/Gerbzz/HungerStrike/actions/runs/39163613317). |
-| Linux, macOS | **Not built or tested.** The cross-platform matrix workflow could not be pushed: the token lacks the `workflow` scope. |
+| Local (Windows 11) | Before Smart App Control blocked further local builds: `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` **117 passed, 0 failed** (78 core, 39 desktop incl. 4 new platform tests); release build rendered Light and Dark `selected` synthetic captures with `HUNGERSTRIKE_CAPTURE_EXIT=1` and no WARN/ERROR lines. After that, per the user's decision to keep SAC on, no further local builds were run; everything below is hosted CI. |
+| Cross-platform CI at `ab963dc` | [Run 39197430196](https://github.com/Gerbzz/HungerStrike/actions/runs/39197430196) **passed**: rustfmt (ubuntu) and, on each of `windows-latest`, `ubuntu-latest` and `macos-latest`, clippy `-D warnings`, `cargo test --workspace` (**117 passed, 0 failed** on each OS) and the release build. |
+| Linux capture | Release app under Xvfb on Mesa llvmpipe (Vulkan) wrote Light and Dark `selected` captures (artifact `hungerstrike-screenshots-ubuntu-latest`). Inspected: the full UI, the 3D fridge scene and DejaVu Sans text render correctly. The XDG portal was absent on the runner, so the theme fell back as designed. |
+| macOS capture | Release app on the runner's "Apple Paravirtual device" (Metal) wrote Light and Dark captures (artifact `hungerstrike-screenshots-macos-latest`). Inspected: correct rendering with Arial; the window was 1024x680 because of the runner's small display. |
+| Windows capture | **Not produced in CI.** The only adapter on `windows-latest` is the WARP software D3D12 driver ("Microsoft Basic Render Driver"); it removed the device (DXGI `0x887A0005`, "Parent device is lost") within seconds at 1440x900 ([run 39166680187](https://github.com/Gerbzz/HungerStrike/actions/runs/39166680187)) and at 1000x700 ([run 39194001090](https://github.com/Gerbzz/HungerStrike/actions/runs/39194001090)). The step is now labelled best-effort on Windows and reports a warning; it is required on Linux and macOS. |
+| Hosted Windows (existing workflow) | "Pantry recommendations" also passed at `ab963dc` ([run 39197430210](https://github.com/Gerbzz/HungerStrike/actions/runs/39197430210)). |
+| Not verified | Hands-on use on Linux and macOS (mouse, keyboard, file dialogs through the XDG portal or the macOS panel, live theme switching), the one-time copy of legacy `./HungerStrike` data on a real machine, and any Linux distribution other than the Ubuntu runner. |
 
 ## 2026-10-18 · themes (`976a297`, `6da6e66`, `a9cedd3`)
 

@@ -7,7 +7,7 @@
 <p align="center"><strong>A free, local-first kitchen assistant: from the receipt to the fridge to dinner.</strong></p>
 
 <p align="center">
-  <code>100% Rust</code> · <code>Windows source preview (alpha)</code> · <code>offline · no account · no paid API</code>
+  <code>100% Rust</code> · <code>Windows · Linux · macOS source preview (alpha)</code> · <code>offline · no account · no paid API</code>
 </p>
 
 <p align="center">
@@ -76,7 +76,7 @@ OCR quality depends on the photo. The bundled engine reads the repository's labe
 | Virtual 3D kitchen | Implemented as an illustrative kitchen; it does not reconstruct a real kitchen from photos |
 | Camera capture | Planned (file import only today) |
 | Android | Planned. A stale [android-preview branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has a Bevy NativeActivity build that was run on an emulator in October; it is not merged and no Android support is claimed. The bundled OCR is pure Rust, so it does not block an Android port the way an external Tesseract did. |
-| Linux, macOS | Portable desktop code; see [Platforms](#platforms) for what CI has verified |
+| Linux, macOS | Built and tested in hosted CI (see [Platforms](#platforms)); not hands-on tested |
 | iOS | Not built or tested |
 | Installer / signed release | Not available |
 
@@ -119,18 +119,18 @@ A platform is listed as **supported** only after hosted CI has built and tested 
 
 | Platform | Status |
 | --- | --- |
-| Windows (x86_64) | **Supported.** Hosted CI on `windows-latest` built the workspace and passed `cargo fmt --check` and `cargo test --workspace` (117 passed, 0 failed) at `902c7d8`: [run 39163613317](https://github.com/Gerbzz/HungerStrike/actions/runs/39163613317). Clippy `-D warnings`, the release build and Light/Dark synthetic captures passed locally on one Windows 11 PC (not yet in hosted CI). |
-| Linux (x86_64) | **Not yet built in CI; not hands-on tested.** Portable code paths (XDG data dir, portal theme, Noto/DejaVu fonts) are in place but unverified. |
-| macOS | **Not yet built in CI; not hands-on tested.** Portable code paths (Application Support data dir, Arial UI font) are in place but unverified. |
+| Windows (x86_64, `windows-latest`) | **Supported.** Hosted CI built the workspace, passed `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` (117 passed, 0 failed), and built the release binary at `ab963dc`: [run 39197430196](https://github.com/Gerbzz/HungerStrike/actions/runs/39197430196). The headless capture is best-effort there and produced no image: the runner's only adapter, the WARP software D3D12 driver, removes the device (DXGI `0x887A0005`) within seconds of opening the 3D scene. Light and Dark app captures were made on one local Windows 11 PC instead. |
+| Linux (x86_64, `ubuntu-latest`) | **Supported** (CI only, not hands-on tested). Same clippy, 117 tests and release build passed at `ab963dc`: [run 39197430196](https://github.com/Gerbzz/HungerStrike/actions/runs/39197430196). The release app rendered Light and Dark synthetic captures under Xvfb with Mesa llvmpipe (Vulkan). |
+| macOS (arm64, `macos-latest`) | **Supported** (CI only, not hands-on tested). Same clippy, 117 tests and release build passed at `ab963dc`: [run 39197430196](https://github.com/Gerbzz/HungerStrike/actions/runs/39197430196). The release app rendered Light and Dark synthetic captures on the runner's paravirtual Metal device; the runner's small display limited the window to 1024x680. |
 | Android, iOS | Not claimed. See *Implemented vs planned*. |
 
-A Cross-platform workflow (rustfmt, clippy `-D warnings`, `cargo test --workspace`, a release build and a headless synthetic capture on `windows-latest`, `ubuntu-latest` and `macos-latest`, with binaries and screenshots uploaded as artifacts) has been written but not yet pushed, so Linux and macOS have no CI results. Hands-on use (mouse, keyboard, file dialogs, live theme switching) has not been tested on Linux or macOS.
+The [Cross-platform workflow](.github/workflows/cross-platform.yml) runs all of this on every pull request and uploads `hungerstrike-desktop-<os>` (release binary plus `assets/`) and `hungerstrike-screenshots-<os>` (captures and logs) as artifacts. "Supported" here means built and tested in hosted CI. Mouse and keyboard use, file dialogs and live theme switching have not been tested by hand on Linux or macOS, and only on one PC on Windows.
 
 ## Verification status
 
 See [verification.md](verification.md) for the dated record. In short, for this branch:
 
-- **Tests:** `cargo fmt --all --check` and `cargo test --workspace` pass (117 tests: 78 core, 39 desktop) locally and in hosted Windows CI at `902c7d8` ([run 39163613317](https://github.com/Gerbzz/HungerStrike/actions/runs/39163613317)). They cover theme resolution, persistence and AA contrast, receipts, ledger, budgets, backups, recipes, database recovery, expiry estimates, bundled OCR on synthetic images, corrupt images, cancellation, timeout, per-line review gating, duplicate photo imports and app actions.
+- **Tests:** `cargo fmt --all --check` and `cargo test --workspace` pass (117 tests: 78 core, 39 desktop) locally and in hosted CI on Windows, Linux and macOS at `ab963dc` ([run 39197430196](https://github.com/Gerbzz/HungerStrike/actions/runs/39197430196)). They cover theme resolution, persistence and AA contrast, receipts, ledger, budgets, backups, recipes, database recovery, expiry estimates, bundled OCR on synthetic images, corrupt images, cancellation, timeout, per-line review gating, duplicate photo imports and app actions.
 - **App-rendered frames:** the built app produced the [frames listed here](docs/CAPTURE_2026-10-17.md), including a real OCR draft from a synthetic photo, reopening a saved profile, and recovery from a corrupted database file.
 - **Clippy:** `cargo clippy --workspace --all-targets -- -D warnings` passes.
 - **Not verified:** native mouse/keyboard click-through, the file dialog and 3D picking on this build (computer-use access to the app window was denied); real receipts; other PCs, GPUs and DPI settings; screen readers.
