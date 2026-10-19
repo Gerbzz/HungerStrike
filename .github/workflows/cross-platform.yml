@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - hungerstrike-cross-platform
   pull_request:
   workflow_dispatch:
 
@@ -91,7 +90,12 @@ jobs:
         run: |
           mkdir -p captures
           bin=target/release/hungerstrike-rust-desktop
-          [ "$RUNNER_OS" = "Windows" ] && bin="$bin.exe"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            bin="$bin.exe"
+            # The runner only has the WARP software DX12 adapter, which lost
+            # the device at 1440x900 (DXGI 0x887A0005); render less per frame.
+            export HUNGERSTRIKE_CAPTURE_SIZE=1000x700 HUNGERSTRIKE_CAPTURE_DELAY=1
+          fi
           status=0
           for theme in light dark; do
             name="hungerstrike-${{ matrix.os }}-selected-$theme.png"
