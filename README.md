@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/branding/HungerStrike.png" alt="Original HungerStrike dormouse and pear logo" width="128" height="128">
+  <img src="assets/branding/HungerStrike-geometric.svg" alt="HungerStrike: stock modules feed a shared pantry bowl" width="128" height="128">
 </p>
 
 <h1 align="center">HungerStrike</h1>

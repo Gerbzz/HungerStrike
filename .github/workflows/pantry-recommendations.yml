@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 55
     env:
       CARGO_BUILD_JOBS: 2
+      STRIKE_REQUIRE_ICON: '1'
     steps:
       - uses: actions/checkout@v4
       - name: Check Rust formatting
@@ -28,6 +29,10 @@ jobs:
         run: cargo test --locked --workspace
       - name: Build native preview executable
         run: cargo build --locked -p hungerstrike-rust-desktop
+      - name: Verify original artwork and embedded geometric icon
+        run: python scripts/verify_geometric_identity.py --svg assets/branding/HungerStrike-geometric.svg --png assets/branding/HungerStrike-geometric.png --ico assets/branding/HungerStrike-geometric.ico --original assets/branding/HungerStrike.png --original-sha256 1652a8d642484ef78c6e4656c44d44ea132e595fcee3a3f92c1dd5b3d41d23c1 --exe target/debug/hungerstrike-rust-desktop.exe
+      - name: Verify resource validator negative controls
+        run: python scripts/test_icon_resource_verifier.py
       - name: Bound and hash preview executable
         shell: pwsh
         run: |
