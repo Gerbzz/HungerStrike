@@ -1,3 +1,4 @@
+mod brand_icon;
 mod ocr;
 mod review_hints;
 mod scene;
@@ -722,6 +723,7 @@ fn main() {
         ))
         .add_observer(scene::lot_clicked)
         .add_systems(Startup, scene::setup)
+        .add_systems(Update, brand_icon::apply)
         .add_systems(
             Update,
             (

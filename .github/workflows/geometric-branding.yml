@@ -1,0 +1,74 @@
+name: Geometric identity native capture
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-brand-capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CARGO_BUILD_JOBS: 2
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native capture prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libxkbcommon-x11-0 libx11-dev libxcursor-dev libxrandr-dev libxi-dev xvfb mesa-vulkan-drivers libvulkan1
+      - uses: Swatinem/rust-cache@v2
+      - name: Build current native source
+        run: cargo build --locked -p hungerstrike-rust-desktop
+      - name: Capture the geometric mark in About with synthetic data
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, signal, struct, subprocess, time, zlib
+          out = pathlib.Path('branding-capture')
+          out.mkdir()
+          png = out.resolve() / 'hungerstrike-about-geometric.png'
+          env = dict(os.environ, HUNGERSTRIKE_ASSETS_DIR=str(pathlib.Path('assets').resolve()),
+                     HUNGERSTRIKE_DATA_DIR=str(out.resolve() / 'isolated-data'),
+                     HUNGERSTRIKE_CAPTURE_DEMO='about', HUNGERSTRIKE_CAPTURE_PATH=str(png),
+                     HUNGERSTRIKE_CAPTURE_DELAY='5')
+          with (out / 'native.log').open('wb') as log:
+              process = subprocess.Popen(['xvfb-run', '-a', '-s', '-screen 0 1920x1080x24',
+                                          'target/debug/hungerstrike-rust-desktop'], env=env,
+                                         stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+              try:
+                  deadline = time.monotonic() + 90
+                  while time.monotonic() < deadline:
+                      data = png.read_bytes() if png.exists() else b''
+                      if len(data) > 10000 and data.endswith(b'IEND\xaeB`\x82'):
+                          break
+                      if process.poll() is not None:
+                          raise RuntimeError(f'native app exited before a complete capture: {process.returncode}')
+                      time.sleep(.25)
+                  else:
+                      raise RuntimeError('native About capture timed out')
+                  assert data.startswith(b'\x89PNG\r\n\x1a\n')
+                  width, height = struct.unpack('>II', data[16:24])
+                  assert width >= 1000 and height >= 700, (width, height)
+                  at, compressed = 8, bytearray()
+                  while at < len(data):
+                      length = struct.unpack('>I', data[at:at+4])[0]
+                      if data[at+4:at+8] == b'IDAT':
+                          compressed.extend(data[at+8:at+8+length])
+                      at += length + 12
+                  assert len(set(zlib.decompress(compressed))) > 32, 'blank capture'
+                  print(f'Current native source About capture: {width}x{height}, {len(data)} bytes; synthetic data only')
+              finally:
+                  if process.poll() is None:
+                      os.killpg(process.pid, signal.SIGTERM)
+                  process.wait(timeout=15)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hungerstrike-geometric-native-${{ github.sha }}
+          path: branding-capture/
+          if-no-files-found: error
+          retention-days: 1

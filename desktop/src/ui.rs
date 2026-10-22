@@ -240,8 +240,8 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
     if !state.style_ready {
         state.dormouse_logo = brand_texture(
             ctx,
-            "HungerStrike original dormouse",
-            include_bytes!("../../assets/branding/HungerStrike.png"),
+            "HungerStrike pantry mark",
+            include_bytes!("../../assets/branding/HungerStrike-geometric.png"),
         );
         state.pwds_logo = brand_texture(
             ctx,
