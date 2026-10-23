@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/branding/HungerStrike.png" alt="Original HungerStrike dormouse and pear logo" width="128" height="128">
+  <img src="assets/branding/HungerStrike-geometric.svg" alt="HungerStrike: stock modules feed a shared pantry bowl" width="128" height="128">
 </p>
 
 <h1 align="center">HungerStrike</h1>
@@ -7,7 +7,7 @@
 <p align="center"><strong>A free, local-first kitchen assistant: from the receipt to the fridge to dinner.</strong></p>
 
 <p align="center">
-  <code>100% Rust</code> · <code>Windows · Linux · macOS source preview (alpha)</code> · <code>offline · no account · no paid API</code>
+  <code>100% Rust</code> · <code>Windows source preview (alpha)</code> · <code>offline · no account · no paid API</code>
 </p>
 
 <p align="center">
@@ -15,30 +15,27 @@
   <a href="#how-receipt-scanning-works">Receipt scanning</a> ·
   <a href="#implemented-vs-planned">Implemented vs planned</a> ·
   <a href="#build-and-run">Build and run</a> ·
-  <a href="#platforms">Platforms</a> ·
   <a href="#verification-status">Verification</a> ·
   <a href="#credits-and-licenses">Credits</a>
 </p>
 
 HungerStrike scans grocery receipts on your own computer, lets you check and correct every line, keeps track of what is in the fridge, freezer and pantry, puts the food that needs using first at the top, suggests recipes from what you have, builds a shopping list for what you are missing, and shows what you spend on food. Everything is stored locally in SQLite.
 
-<p align="center">
-  <img src="assets/screenshots/hungerstrike-selected-light-6da6e66-1440x900.png" alt="Kitchen in the default Light theme with synthetic stock, a selected lot, the expiry editor and the Use first list" width="420">
-  <img src="assets/screenshots/hungerstrike-selected-dark-6da6e66-1440x900.png" alt="Kitchen in the Dark theme: dark panels and an evening kitchen scene" width="420">
-</p>
-<p align="center"><sub><b>Kitchen</b>: left Light (default), right Dark.</sub></p>
+<p align="center"><img src="assets/screenshots/hungerstrike-about-geometric-e97d475-1440x900.png" alt="HungerStrike Kitchen and About panel with the geometric pantry mark and labelled synthetic stock" width="860"></p>
+<p align="center"><sub>Native Linux app capture of Kitchen and About, using synthetic data. Built from reviewed tree <code>94888d1</code>, merged in <code>6c1cf6d</code>. <a href="docs/CAPTURE_2026-10-21_GEOMETRIC.md">Capture source, checks and limits</a>.</sub></p>
 
-<p align="center">
-  <img src="assets/screenshots/hungerstrike-receipt-photo-light-6da6e66-1440x900.png" alt="Receipt review in Light: draft produced by the bundled OCR from a synthetic labelled photo" width="420">
-  <img src="assets/screenshots/hungerstrike-receipt-photo-dark-6da6e66-1440x900.png" alt="Receipt review in Dark" width="420">
-</p>
-<p align="center"><sub><b>Receipt review</b> of the synthetic photo: left Light, right Dark.</sub></p>
+<details>
+<summary>Historical Windows views — October 17, 2026, source 7222c4b</summary>
 
+These older captures document the selected-stock, receipt and meal workflows at that source checkpoint. They are retained as historical examples; they do not show the current branding. [Original gallery and provenance](docs/CAPTURE_2026-10-17.md).
+
+<p align="center"><img src="assets/screenshots/hungerstrike-selected-7222c4b-1440x900.png" alt="Historical October 17 Kitchen capture with selected stock and expiry controls" width="860"></p>
 <p align="center">
-  <img src="assets/screenshots/hungerstrike-spending-light-6da6e66-1440x900.png" alt="Spending and budgets in Light" width="420">
-  <img src="assets/screenshots/hungerstrike-spending-dark-6da6e66-1440x900.png" alt="Spending and budgets in Dark" width="420">
+  <img src="assets/screenshots/hungerstrike-receipt-photo-7222c4b-1440x900.png" alt="Historical October 17 receipt review draft from a synthetic labelled photo" width="420">
+  <img src="assets/screenshots/hungerstrike-plan-next-7222c4b-1440x900.png" alt="Historical October 17 Meals Plan next view" width="420">
 </p>
-<p align="center"><sub><b>Spending</b>: left Light, right Dark. App-rendered frames from source <code>6da6e66</code>, synthetic test data; the small red "widget ID" debug overlay was fixed afterwards. Provenance: <a href="docs/CAPTURE_2026-10-18_THEMES.md">theme captures</a>, <a href="docs/CAPTURE_2026-10-17.md">earlier captures</a> (OCR, reopen, database recovery, meals).</sub></p>
+
+</details>
 
 ## What works today
 
@@ -50,7 +47,6 @@ HungerStrike scans grocery receipts on your own computer, lets you check and cor
 | **Meals** | Ten bundled original recipes. *Cook now* uses stock you have; *Use soon* prefers recipes that use dated stock; *Plan next* ranks recipes by how few ingredients are missing. Cooking previews the exact lots before stock changes. Missing ingredients for one or several selected meals can be added to a combined local shopping list. |
 | **Spending** | Cash paid, food vs household allocations, refunds, consumed and discarded food cost, with weekly and monthly budgets. |
 | **Data** | Export a JSON backup, preview an import, replace or reconcile, and undo the last replacement. If the local database is ever unreadable it is renamed aside (never deleted) and a fresh one is started, with a message saying where the old file is. |
-| **Theme** | Light (the original look, default), Dark, or System (follows the operating system's light/dark setting: reported by the window system on Windows and macOS, read from the XDG desktop portal on Linux). Set it on the Data tab; it applies immediately and is saved with your local data. Dark keeps the teal accent family with colours checked for WCAG AA contrast, and switches the 3D kitchen to an evening look. |
 
 ## How receipt scanning works
 
@@ -76,7 +72,7 @@ OCR quality depends on the photo. The bundled engine reads the repository's labe
 | Virtual 3D kitchen | Implemented as an illustrative kitchen; it does not reconstruct a real kitchen from photos |
 | Camera capture | Planned (file import only today) |
 | Android | Planned. A stale [android-preview branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has a Bevy NativeActivity build that was run on an emulator in October; it is not merged and no Android support is claimed. The bundled OCR is pure Rust, so it does not block an Android port the way an external Tesseract did. |
-| Linux, macOS | Built and tested in hosted CI (see [Platforms](#platforms)); not hands-on tested |
+| Linux, macOS | Prior portability candidate built and tested in hosted CI (see [Platforms](#platforms)); integrated migration/branding candidate requires fresh validation; not hands-on tested |
 | iOS | Not built or tested |
 | Installer / signed release | Not available |
 
@@ -128,12 +124,18 @@ The [Cross-platform workflow](.github/workflows/cross-platform.yml) runs all of 
 
 ## Verification status
 
-See [verification.md](verification.md) for the dated record. In short, for this branch:
+See [verification.md](verification.md) for the earlier dated record and [the October 21 capture record](docs/CAPTURE_2026-10-21_GEOMETRIC.md) for the reviewed branding tree merged in `6c1cf6d`:
 
-- **Tests:** `cargo fmt --all --check` and `cargo test --workspace` pass (117 tests: 78 core, 39 desktop) locally and in hosted CI on Windows, Linux and macOS at `ab963dc` ([run 39197430196](https://github.com/Gerbzz/HungerStrike/actions/runs/39197430196)). They cover theme resolution, persistence and AA contrast, receipts, ledger, budgets, backups, recipes, database recovery, expiry estimates, bundled OCR on synthetic images, corrupt images, cancellation, timeout, per-line review gating, duplicate photo imports and app actions.
-- **App-rendered frames:** the built app produced the [frames listed here](docs/CAPTURE_2026-10-17.md), including a real OCR draft from a synthetic photo, reopening a saved profile, and recovery from a corrupted database file.
-- **Clippy:** `cargo clippy --workspace --all-targets -- -D warnings` passes.
-- **Not verified:** native mouse/keyboard click-through, the file dialog and 3D picking on this build (computer-use access to the app window was denied); real receipts; other PCs, GPUs and DPI settings; screen readers.
+- **Tests:** [Hosted Windows CI](https://github.com/Gerbzz/HungerStrike/actions/runs/39689376639) passed formatting and the workspace tests (103 tests: 76 core, 27 desktop) on the reviewed branding tree. They cover receipts, ledger, budgets, backups, recipes, database recovery, expiry estimates, bundled OCR on synthetic images, corrupt images, cancellation, timeout, per-line review gating, duplicate photo imports and app actions.
+- **Current native capture:** [hosted Linux CI](https://github.com/Gerbzz/HungerStrike/actions/runs/39689376824) built the native app and produced the unmodified 1440 × 900 Kitchen/About image above. The geometric mark, app name and synthetic-data labels are visible. This is an automated capture, not an interactive acceptance test.
+- **Historical frames:** the [October 17 gallery](docs/CAPTURE_2026-10-17.md) records the earlier source checkpoint, including an OCR draft from a synthetic photo, reopening a saved profile, and recovery from a corrupted database file.
+- **Not verified:** native mouse/keyboard click-through, the file dialog and 3D picking on this build (the hosted capture does not establish those interactions); `cargo clippy` for the desktop crate (Windows Smart App Control blocked a build-time library, see verification.md); real receipts; other PCs, GPUs and DPI settings; screen readers.
+
+### Portability and safe migration candidate
+
+The earlier portability source `0ecd19e` passed the [three-OS build/test workflow](https://github.com/Gerbzz/HungerStrike/actions/runs/39252501361). It is now integrated with the geometric branding above and a reviewed SQLite migration repair; fresh checks on that combined source are required. Those prior results are not proof of the combined build. The [October 18 theme capture record](docs/CAPTURE_2026-10-18_THEMES.md) remains historical evidence, not current branding.
+
+Migration uses a consistent SQLite backup and atomic no-clobber publication, not independent copies of live WAL/journal files. Existing data remains in place. Missing legacy data permits a normal first start; unreadable, corrupt, locked or nonregular legacy paths and conflicting destination sidecars stop startup rather than silently opening an empty kitchen. Legacy symlinks require manual resolution. Atomicity protects the published database and cooperating app launches, not arbitrary unrelated sidecar writers. The nine migration regressions and all 87 core tests passed locally; native startup and the combined three-OS checks remain separate gates.
 
 ## Data and privacy
 
@@ -145,7 +147,7 @@ No account, telemetry, cloud sync or runtime network call. Receipt photos and OC
 - OCR models: the published ocrs text detection and recognition models (CC BY-SA 4.0), redistributed unmodified; sources and hashes in [assets/ocr/NOTICE.md](assets/ocr/NOTICE.md).
 - 3D food models: [Poly Haven](https://polyhaven.com) (CC0); see [assets/models/polyhaven/PROVENANCE.md](assets/models/polyhaven/PROVENANCE.md).
 - Built with [Bevy](https://bevyengine.org), [egui](https://github.com/emilk/egui) and SQLite via rusqlite.
-- HungerStrike dormouse artwork is original ([provenance](assets/branding/provenance.json)). PWDS company marks appear only on the launch screen and in About.
+- HungerStrike's geometric pantry mark is original ([identity notes](assets/branding/GEOMETRIC-IDENTITY.md)). The original dormouse artwork is preserved ([provenance](assets/branding/provenance.json)). PWDS company marks appear only on the launch screen and in About.
 - This README's layout loosely follows the structure of the [PhotoCraft README](https://github.com/storytold/photocraft) (tagline, jump links, feature table, status, credits). No text or assets were copied.
 
 No license has been chosen yet for HungerStrike's own source code. Bundled third-party files keep their own licenses as listed above.

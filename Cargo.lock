@@ -3340,6 +3340,7 @@ dependencies = [
  "rten-imageproc",
  "serde_json",
  "tempfile",
+ "winit",
 ]
 
 [[package]]
