@@ -9,7 +9,7 @@
 //! * System theme on Linux: winit does not report the desktop colour scheme
 //!   on X11, so it is read from the XDG desktop portal when available.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub const APP_DIR: &str = "HungerStrike";
 pub const DB_FILE: &str = "inventory.sqlite";
@@ -187,6 +187,7 @@ pub fn portal_system_dark() -> Option<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn override_wins_over_platform_location() {
