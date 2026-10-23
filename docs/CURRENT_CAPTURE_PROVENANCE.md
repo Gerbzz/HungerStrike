@@ -1,4 +1,6 @@
-# Current light interface captures
+# Historical light interface captures
+
+These October 15 source checkpoints predate the geometric branding and are retained as historical evidence. For the native tree merged in `6c1cf6d`, see [the October 21 capture record](CAPTURE_2026-10-21_GEOMETRIC.md).
 
 These are unedited PNGs written by HungerStrike's built-in Bevy screenshot path. Each run used a separate synthetic local SQLite profile. The visible **SYNTHETIC TEST DATA** is not a personal receipt or inventory. The older light and dark captures remain in the repository with separate provenance.
 

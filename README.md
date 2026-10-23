@@ -21,13 +21,21 @@
 
 HungerStrike scans grocery receipts on your own computer, lets you check and correct every line, keeps track of what is in the fridge, freezer and pantry, puts the food that needs using first at the top, suggests recipes from what you have, builds a shopping list for what you are missing, and shows what you spend on food. Everything is stored locally in SQLite.
 
-<p align="center"><img src="assets/screenshots/hungerstrike-selected-7222c4b-1440x900.png" alt="HungerStrike Kitchen with synthetic stock, a selected lot, the expiry editor and the Use first list" width="860"></p>
-<p align="center"><sub>App-rendered frame from source <code>7222c4b</code> with synthetic test data. <a href="docs/CAPTURE_2026-10-17.md">All frames and their provenance</a>.</sub></p>
+<p align="center"><img src="assets/screenshots/hungerstrike-about-geometric-e97d475-1440x900.png" alt="HungerStrike Kitchen and About panel with the geometric pantry mark and labelled synthetic stock" width="860"></p>
+<p align="center"><sub>Native Linux app capture of Kitchen and About, using synthetic data. Built from reviewed tree <code>94888d1</code>, merged in <code>6c1cf6d</code>. <a href="docs/CAPTURE_2026-10-21_GEOMETRIC.md">Capture source, checks and limits</a>.</sub></p>
 
+<details>
+<summary>Historical Windows views — October 17, 2026, source 7222c4b</summary>
+
+These older captures document the selected-stock, receipt and meal workflows at that source checkpoint. They are retained as historical examples; they do not show the current branding. [Original gallery and provenance](docs/CAPTURE_2026-10-17.md).
+
+<p align="center"><img src="assets/screenshots/hungerstrike-selected-7222c4b-1440x900.png" alt="Historical October 17 Kitchen capture with selected stock and expiry controls" width="860"></p>
 <p align="center">
-  <img src="assets/screenshots/hungerstrike-receipt-photo-7222c4b-1440x900.png" alt="Receipt review draft produced by the bundled OCR from a synthetic labelled photo" width="420">
-  <img src="assets/screenshots/hungerstrike-plan-next-7222c4b-1440x900.png" alt="Meals Plan next view with ranked recipes and missing groceries" width="420">
+  <img src="assets/screenshots/hungerstrike-receipt-photo-7222c4b-1440x900.png" alt="Historical October 17 receipt review draft from a synthetic labelled photo" width="420">
+  <img src="assets/screenshots/hungerstrike-plan-next-7222c4b-1440x900.png" alt="Historical October 17 Meals Plan next view" width="420">
 </p>
+
+</details>
 
 ## What works today
 
@@ -64,7 +72,8 @@ OCR quality depends on the photo. The bundled engine reads the repository's labe
 | Virtual 3D kitchen | Implemented as an illustrative kitchen; it does not reconstruct a real kitchen from photos |
 | Camera capture | Planned (file import only today) |
 | Android | Planned. A stale [android-preview branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has a Bevy NativeActivity build that was run on an emulator in October; it is not merged and no Android support is claimed. The bundled OCR is pure Rust, so it does not block an Android port the way an external Tesseract did. |
-| iOS, macOS, Linux | Not built or tested |
+| Linux | Native build and automated About capture passed in hosted CI on the reviewed branding tree; interactive desktop use and general Linux support are not established |
+| iOS, macOS | Not built or tested |
 | Installer / signed release | Not available |
 
 ## Build and run
@@ -83,11 +92,12 @@ For isolated, clearly labelled synthetic captures, set `HUNGERSTRIKE_CAPTURE_DEM
 
 ## Verification status
 
-See [verification.md](verification.md) for the dated record. In short, for this branch:
+See [verification.md](verification.md) for the earlier dated record and [the October 21 capture record](docs/CAPTURE_2026-10-21_GEOMETRIC.md) for the reviewed branding tree merged in `6c1cf6d`:
 
-- **Tests:** `cargo fmt --all --check` and `cargo test --workspace` pass locally (103 tests: 76 core, 27 desktop) and in hosted Windows CI. They cover receipts, ledger, budgets, backups, recipes, database recovery, expiry estimates, bundled OCR on synthetic images, corrupt images, cancellation, timeout, per-line review gating, duplicate photo imports and app actions.
-- **App-rendered frames:** the built app produced the [frames listed here](docs/CAPTURE_2026-10-17.md), including a real OCR draft from a synthetic photo, reopening a saved profile, and recovery from a corrupted database file.
-- **Not verified:** native mouse/keyboard click-through, the file dialog and 3D picking on this build (computer-use access to the app window was denied); `cargo clippy` for the desktop crate (Windows Smart App Control blocked a build-time library, see verification.md); real receipts; other PCs, GPUs and DPI settings; screen readers.
+- **Tests:** [Hosted Windows CI](https://github.com/Gerbzz/HungerStrike/actions/runs/39689376639) passed formatting and the workspace tests (103 tests: 76 core, 27 desktop) on the reviewed branding tree. They cover receipts, ledger, budgets, backups, recipes, database recovery, expiry estimates, bundled OCR on synthetic images, corrupt images, cancellation, timeout, per-line review gating, duplicate photo imports and app actions.
+- **Current native capture:** [hosted Linux CI](https://github.com/Gerbzz/HungerStrike/actions/runs/39689376824) built the native app and produced the unmodified 1440 × 900 Kitchen/About image above. The geometric mark, app name and synthetic-data labels are visible. This is an automated capture, not an interactive acceptance test.
+- **Historical frames:** the [October 17 gallery](docs/CAPTURE_2026-10-17.md) records the earlier source checkpoint, including an OCR draft from a synthetic photo, reopening a saved profile, and recovery from a corrupted database file.
+- **Not verified:** native mouse/keyboard click-through, the file dialog and 3D picking on this build (the hosted capture does not establish those interactions); `cargo clippy` for the desktop crate (Windows Smart App Control blocked a build-time library, see verification.md); real receipts; other PCs, GPUs and DPI settings; screen readers.
 
 ## Data and privacy
 
@@ -99,7 +109,7 @@ No account, telemetry, cloud sync or runtime network call. Receipt photos and OC
 - OCR models: the published ocrs text detection and recognition models (CC BY-SA 4.0), redistributed unmodified; sources and hashes in [assets/ocr/NOTICE.md](assets/ocr/NOTICE.md).
 - 3D food models: [Poly Haven](https://polyhaven.com) (CC0); see [assets/models/polyhaven/PROVENANCE.md](assets/models/polyhaven/PROVENANCE.md).
 - Built with [Bevy](https://bevyengine.org), [egui](https://github.com/emilk/egui) and SQLite via rusqlite.
-- HungerStrike dormouse artwork is original ([provenance](assets/branding/provenance.json)). PWDS company marks appear only on the launch screen and in About.
+- HungerStrike's geometric pantry mark is original ([identity notes](assets/branding/GEOMETRIC-IDENTITY.md)). The original dormouse artwork is preserved ([provenance](assets/branding/provenance.json)). PWDS company marks appear only on the launch screen and in About.
 - This README's layout loosely follows the structure of the [PhotoCraft README](https://github.com/storytold/photocraft) (tagline, jump links, feature table, status, credits). No text or assets were copied.
 
 No license has been chosen yet for HungerStrike's own source code. Bundled third-party files keep their own licenses as listed above.
