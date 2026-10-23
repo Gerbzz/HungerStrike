@@ -56,35 +56,8 @@ pub fn legacy_data_path() -> Option<PathBuf> {
     Some(PathBuf::from(".").join(APP_DIR).join(DB_FILE))
 }
 
-/// Copy a database (and any SQLite sidecar files) from a legacy location to
-/// the new one. Nothing is moved or deleted: the legacy files stay where they
-/// are. Returns `Ok(true)` when a copy was made. Does nothing when the new
-/// database already exists or the legacy one does not.
-pub fn migrate_legacy_data(legacy: &Path, target: &Path) -> std::io::Result<bool> {
-    if target.exists() || !legacy.is_file() {
-        return Ok(false);
-    }
-    if let (Ok(a), Ok(b)) = (legacy.canonicalize(), target.canonicalize()) {
-        if a == b {
-            return Ok(false);
-        }
-    }
-    if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    for suffix in ["-journal", "-wal", "-shm"] {
-        let mut from = legacy.as_os_str().to_owned();
-        from.push(suffix);
-        let from = PathBuf::from(from);
-        if from.is_file() {
-            let mut to = target.as_os_str().to_owned();
-            to.push(suffix);
-            std::fs::copy(&from, PathBuf::from(to))?;
-        }
-    }
-    std::fs::copy(legacy, target)?;
-    Ok(true)
-}
+// Shared with core regression tests: SQLite snapshot and atomic no-clobber publication.
+pub use hungerstrike_core::migrate_legacy_data;
 
 /// Candidate (regular, medium) system UI font files, most preferred first.
 pub fn ui_font_candidates() -> Vec<(PathBuf, PathBuf)> {
@@ -237,39 +210,6 @@ mod tests {
         if let Some(local) = std::env::var_os("LOCALAPPDATA") {
             assert_eq!(parent, PathBuf::from(local));
         }
-    }
-
-    #[test]
-    fn migration_copies_without_deleting_and_never_overwrites() {
-        let dir = tempfile::tempdir().unwrap();
-        let legacy = dir.path().join("old").join(APP_DIR).join(DB_FILE);
-        let target = dir.path().join("new").join(APP_DIR).join(DB_FILE);
-        // No legacy data: nothing happens.
-        assert!(!migrate_legacy_data(&legacy, &target).unwrap());
-        assert!(!target.exists());
-
-        std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
-        std::fs::write(&legacy, b"legacy-db").unwrap();
-        let mut journal = legacy.as_os_str().to_owned();
-        journal.push("-journal");
-        std::fs::write(PathBuf::from(&journal), b"legacy-journal").unwrap();
-
-        assert!(migrate_legacy_data(&legacy, &target).unwrap());
-        assert_eq!(std::fs::read(&target).unwrap(), b"legacy-db");
-        let mut new_journal = target.as_os_str().to_owned();
-        new_journal.push("-journal");
-        assert_eq!(
-            std::fs::read(PathBuf::from(new_journal)).unwrap(),
-            b"legacy-journal"
-        );
-        // The originals are kept.
-        assert_eq!(std::fs::read(&legacy).unwrap(), b"legacy-db");
-        assert!(PathBuf::from(&journal).exists());
-
-        // An existing database at the new location is never overwritten.
-        std::fs::write(&legacy, b"changed").unwrap();
-        assert!(!migrate_legacy_data(&legacy, &target).unwrap());
-        assert_eq!(std::fs::read(&target).unwrap(), b"legacy-db");
     }
 
     #[test]

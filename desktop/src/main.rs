@@ -530,18 +530,24 @@ fn main() {
     std::fs::create_dir_all(path.parent().expect("data folder")).expect("create local data folder");
     // Earlier macOS/Linux builds kept data under the working directory. Copy
     // it to the per-OS location once; the original files are left in place.
-    let migrated_from = platform::legacy_data_path().filter(|legacy| {
-        match platform::migrate_legacy_data(legacy, &path) {
-            Ok(copied) => copied,
+    let migrated_from = match platform::legacy_data_path() {
+        Some(legacy) => match platform::migrate_legacy_data(&legacy, &path) {
+            Ok(true) => Some(legacy),
+            Ok(false) => None,
             Err(error) => {
-                eprintln!(
-                    "HungerStrike: could not copy earlier data from {}: {error}",
-                    legacy.display()
-                );
-                false
+                rfd::MessageDialog::new()
+                    .set_level(rfd::MessageLevel::Error)
+                    .set_title("HungerStrike could not migrate local data")
+                    .set_description(format!(
+                        "{error}\n\nThe original kitchen at {} was kept. No new kitchen will be opened. Close any older HungerStrike instance and retry. Destination: {}",
+                        legacy.display(), path.display()
+                    ))
+                    .show();
+                std::process::exit(1);
             }
-        }
-    });
+        },
+        None => None,
+    };
     let (store, recovery) = match Store::open_or_recover(&path) {
         Ok(opened) => opened,
         Err(error) => {
