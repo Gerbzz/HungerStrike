@@ -858,11 +858,22 @@ fn capture_once(
     }
 }
 
-/// With `HUNGERSTRIKE_CAPTURE_EXIT=1`, quit once the capture has been written
-/// (the save observer writes the file synchronously). Used by headless CI.
-fn exit_after_capture(_captured: On<ScreenshotCaptured>, mut exit: MessageWriter<AppExit>) {
+/// With `HUNGERSTRIKE_CAPTURE_EXIT=1`, close normally after screenshot observers
+/// finish (the save observer writes synchronously). Do not send AppExit while
+/// the window is live: Bevy 0.18.1 can drop its last native window handle on the
+/// render thread and deadlock on macOS (bevyengine/bevy#23313, fixed by #23838).
+/// The normal close path marks ClosingWindow, lets rendering release the handle,
+/// then despawns the window on the next frame before WindowPlugin emits AppExit.
+fn exit_after_capture(
+    _captured: On<ScreenshotCaptured>,
+    windows: Query<Entity, With<bevy::window::PrimaryWindow>>,
+    mut close: MessageWriter<bevy::window::WindowCloseRequested>,
+) {
     if std::env::var("HUNGERSTRIKE_CAPTURE_EXIT").as_deref() == Ok("1") {
-        exit.write(AppExit::Success);
+        for window in &windows {
+            info!("Capture complete; requesting normal primary-window close");
+            close.write(bevy::window::WindowCloseRequested { window });
+        }
     }
 }
 
@@ -870,6 +881,84 @@ fn exit_after_capture(_captured: On<ScreenshotCaptured>, mut exit: MessageWriter
 mod tests {
     use super::*;
     use hungerstrike_core::DraftItem;
+
+    #[test]
+    fn capture_exit_uses_normal_window_close_lifecycle() {
+        use bevy::window::{ClosingWindow, PrimaryWindow, WindowCloseRequested};
+
+        let mut app = App::new();
+        app.add_plugins(WindowPlugin::default());
+        app.add_observer(exit_after_capture);
+        let window = app
+            .world_mut()
+            .query_filtered::<Entity, With<PrimaryWindow>>()
+            .single(app.world())
+            .unwrap();
+        let screenshot = app.world_mut().spawn_empty().id();
+        // This is the only test modifying this variable; restore it before
+        // assertions, and do not launch the application from unit tests.
+        let previous = std::env::var_os("HUNGERSTRIKE_CAPTURE_EXIT");
+        let mut disabled_requests = Vec::new();
+        for flag in [None, Some("0"), Some("true")] {
+            match flag {
+                Some(value) => std::env::set_var("HUNGERSTRIKE_CAPTURE_EXIT", value),
+                None => std::env::remove_var("HUNGERSTRIKE_CAPTURE_EXIT"),
+            }
+            app.world_mut().trigger(ScreenshotCaptured {
+                entity: screenshot,
+                image: Image::default(),
+            });
+            disabled_requests.push((
+                app.world()
+                    .resource::<Messages<WindowCloseRequested>>()
+                    .len(),
+                app.should_exit(),
+            ));
+        }
+        std::env::set_var("HUNGERSTRIKE_CAPTURE_EXIT", "1");
+        app.world_mut().trigger(ScreenshotCaptured {
+            entity: screenshot,
+            image: Image::default(),
+        });
+        match previous {
+            Some(value) => std::env::set_var("HUNGERSTRIKE_CAPTURE_EXIT", value),
+            None => std::env::remove_var("HUNGERSTRIKE_CAPTURE_EXIT"),
+        }
+
+        assert!(
+            disabled_requests
+                .iter()
+                .all(|(count, exit)| *count == 0 && exit.is_none()),
+            "capture without exact exit opt-in must keep the window open"
+        );
+        let requests = app.world().resource::<Messages<WindowCloseRequested>>();
+        assert_eq!(
+            requests.len(),
+            1,
+            "capture must request native window close"
+        );
+        assert_eq!(
+            requests
+                .iter_current_update_messages()
+                .next()
+                .unwrap()
+                .window,
+            window
+        );
+        assert!(
+            app.should_exit().is_none(),
+            "do not exit while the native window is live"
+        );
+        app.update();
+        assert!(app.world().get::<ClosingWindow>(window).is_some());
+        assert!(
+            app.should_exit().is_none(),
+            "allow a render frame to release its window handle"
+        );
+        app.update();
+        assert!(app.world().get_entity(window).is_err());
+        assert_eq!(app.should_exit(), Some(AppExit::Success));
+    }
 
     const RECEIPT: &str = include_str!("../../core/tests/fixtures/receipts/R001-purchase.txt");
 
