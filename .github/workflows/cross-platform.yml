@@ -1,0 +1,139 @@
+name: Cross-platform
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  # Keep hosted runners inside their disk budget: no full debuginfo.
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+
+jobs:
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rustfmt
+        run: rustup component add rustfmt
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+  build-test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build and capture packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev \
+            libxkbcommon-x11-0 libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
+            xvfb mesa-vulkan-drivers libvulkan1
+
+      - name: Install clippy
+        run: rustup component add clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
+
+      - name: Clippy
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      - name: Test workspace
+        run: cargo test --locked --workspace
+
+      - name: Build release desktop binary
+        run: cargo build --locked --release -p hungerstrike-rust-desktop
+
+      - name: Collect binary
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp target/release/hungerstrike-rust-desktop.exe dist/
+          else
+            cp target/release/hungerstrike-rust-desktop dist/
+          fi
+          cp -R assets dist/assets
+          rm -rf dist/assets/screenshots
+          (cd dist && ls -l)
+
+      - name: Upload desktop binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: hungerstrike-desktop-${{ matrix.os }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+      # Required on Linux (Mesa lavapipe under Xvfb) and macOS (paravirtual
+      # Metal). Best-effort on Windows: the hosted runner only offers the WARP
+      # software D3D12 adapter, which removes the device (DXGI 0x887A0005)
+      # within seconds of opening the 3D scene, at 1440x900 and at 1000x700.
+      # A Windows failure here is reported as a warning, never as a capture.
+      - name: ${{ matrix.os == 'windows-latest' && 'Headless app capture (best-effort on WARP, not required)' || 'Headless app capture (synthetic data)' }}
+        id: capture
+        continue-on-error: ${{ matrix.os == 'windows-latest' }}
+        timeout-minutes: 10
+        shell: bash
+        env:
+          HUNGERSTRIKE_ASSETS_DIR: ${{ github.workspace }}/assets
+          HUNGERSTRIKE_CAPTURE_DEMO: selected
+          HUNGERSTRIKE_CAPTURE_EXIT: "1"
+          HUNGERSTRIKE_CAPTURE_DELAY: "5"
+          CAPTURE_DIR: ${{ github.workspace }}/captures
+        run: |
+          mkdir -p captures
+          bin=target/release/hungerstrike-rust-desktop
+          [ "$RUNNER_OS" = "Windows" ] && bin="$bin.exe"
+          level=error
+          [ "$RUNNER_OS" = "Windows" ] && level=warning
+          status=0
+          for theme in light dark; do
+            name="hungerstrike-${{ matrix.os }}-selected-$theme.png"
+            out="$CAPTURE_DIR/$name"
+            export HUNGERSTRIKE_CAPTURE_THEME=$theme
+            export HUNGERSTRIKE_CAPTURE_PATH="$out"
+            export HUNGERSTRIKE_DATA_DIR="$RUNNER_TEMP/hs-capture-$theme"
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              xvfb-run -a -s "-screen 0 1920x1080x24" "$bin" > "captures/$theme.log" 2>&1 || status=$?
+            else
+              "$bin" > "captures/$theme.log" 2>&1 || status=$?
+            fi
+            grep -E 'AdapterInfo|ERROR|panicked|Screenshot saved' "captures/$theme.log" | head -n 20 || true
+            if [ -s "captures/$name" ]; then
+              echo "captured captures/$name"
+            else
+              echo "::$level::no $theme capture written on ${{ matrix.os }} (see captures/$theme.log in the screenshots artifact)"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Upload screenshots and capture logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hungerstrike-screenshots-${{ matrix.os }}
+          path: captures/
+          if-no-files-found: warn
+          retention-days: 14

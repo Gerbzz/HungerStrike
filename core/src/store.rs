@@ -31,6 +31,9 @@ pub(crate) struct State {
     pub weekly_budget_cents: Option<i64>,
     #[serde(default)]
     pub monthly_budget_cents: Option<i64>,
+    /// Display theme setting: "light", "dark" or "system". Absent means light.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui_theme: Option<String>,
     #[serde(default)]
     pub category_edits: Vec<CategoryEdit>,
     #[serde(default)]
@@ -54,6 +57,7 @@ impl Default for State {
             refund_without_stock_reversal_cents: 0,
             weekly_budget_cents: None,
             monthly_budget_cents: None,
+            ui_theme: None,
             category_edits: Vec::new(),
             receipt_edits: Vec::new(),
         }

@@ -72,23 +72,55 @@ OCR quality depends on the photo. The bundled engine reads the repository's labe
 | Virtual 3D kitchen | Implemented as an illustrative kitchen; it does not reconstruct a real kitchen from photos |
 | Camera capture | Planned (file import only today) |
 | Android | Planned. A stale [android-preview branch](https://github.com/Gerbzz/HungerStrike/tree/android-preview) has a Bevy NativeActivity build that was run on an emulator in October; it is not merged and no Android support is claimed. The bundled OCR is pure Rust, so it does not block an Android port the way an external Tesseract did. |
-| Linux | Native build and automated About capture passed in hosted CI on the reviewed branding tree; interactive desktop use and general Linux support are not established |
-| iOS, macOS | Not built or tested |
+| Linux, macOS | Prior portability candidate built and tested in hosted CI (see [Platforms](#platforms)); integrated migration/branding candidate requires fresh validation; not hands-on tested |
+| iOS | Not built or tested |
 | Installer / signed release | Not available |
 
 ## Build and run
 
-You need a stable Rust toolchain on Windows. From the repository root:
+You need a stable Rust toolchain ([rustup](https://rustup.rs)) plus the per-OS prerequisites below. SQLite and the OCR engine are compiled in, so nothing else needs installing.
 
-```powershell
+| OS | Build prerequisites |
+| --- | --- |
+| Windows 10/11 | Visual Studio Build Tools with the "Desktop development with C++" workload (MSVC and the Windows SDK). |
+| macOS | Xcode Command Line Tools (`xcode-select --install`). |
+| Linux (Debian/Ubuntu) | `sudo apt-get install pkg-config libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev` and a C compiler (`build-essential`). Running needs a Vulkan or OpenGL driver (Mesa is fine). The file picker and error dialogs use the XDG desktop portal (`xdg-desktop-portal` plus a backend such as `-gtk` or `-kde`), with `zenity` as the fallback; no GTK development headers are needed to build. Other distributions need the equivalent ALSA, udev, Wayland and xkbcommon development packages. |
+
+From the repository root:
+
+```sh
 cargo build --release -p hungerstrike-rust-desktop
-.\target\release\hungerstrike-rust-desktop.exe
 cargo test --workspace
+# Windows: .\target\release\hungerstrike-rust-desktop.exe
+# macOS / Linux: ./target/release/hungerstrike-rust-desktop
 ```
 
-The OCR crates are optimised even in debug builds (see `[profile.dev.package.*]` in `Cargo.toml`) so the tests run in seconds. Data lives at `%LOCALAPPDATA%\HungerStrike\inventory.sqlite`; set `HUNGERSTRIKE_DATA_DIR` to use a separate profile. See [launch notes](docs/launch.md) and the [workflow walkthrough](docs/workflow.md).
+The app loads its 3D models from an `assets` folder next to the executable; when running from `target/release`, set `HUNGERSTRIKE_ASSETS_DIR` to the repository's `assets` folder (the CI binary artifacts already include `assets/`).
 
-For isolated, clearly labelled synthetic captures, set `HUNGERSTRIKE_CAPTURE_DEMO` to one of `kitchen`, `selected`, `receipt`, `receipt-photo`, `plan-next`, `spending`, `about` or `launch`, plus `HUNGERSTRIKE_CAPTURE_PATH` (optionally `HUNGERSTRIKE_CAPTURE_SIZE` and `HUNGERSTRIKE_CAPTURE_DELAY`), and point `HUNGERSTRIKE_DATA_DIR` at a throwaway folder. These routes show a **SYNTHETIC TEST DATA** label.
+The OCR crates are optimised even in debug builds (see `[profile.dev.package.*]` in `Cargo.toml`) so the tests run in seconds. Set `HUNGERSTRIKE_DATA_DIR` to use a separate profile. Otherwise local data lives at:
+
+| OS | Data file |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\HungerStrike\inventory.sqlite` (unchanged from earlier builds) |
+| macOS | `~/Library/Application Support/HungerStrike/inventory.sqlite` |
+| Linux | `$XDG_DATA_HOME/HungerStrike/inventory.sqlite`, normally `~/.local/share/HungerStrike/inventory.sqlite` |
+
+Earlier macOS/Linux source builds wrote to `./HungerStrike/inventory.sqlite` under the working directory. On first start the app copies that database to the location above if nothing is there yet, and leaves the original in place. See [launch notes](docs/launch.md) and the [workflow walkthrough](docs/workflow.md).
+
+For isolated, clearly labelled synthetic captures, set `HUNGERSTRIKE_CAPTURE_DEMO` to one of `kitchen`, `selected`, `receipt`, `receipt-photo`, `plan-next`, `spending`, `about` or `launch`, plus `HUNGERSTRIKE_CAPTURE_PATH` (optionally `HUNGERSTRIKE_CAPTURE_SIZE`, `HUNGERSTRIKE_CAPTURE_DELAY`, `HUNGERSTRIKE_CAPTURE_THEME`, and `HUNGERSTRIKE_CAPTURE_EXIT=1` to quit once the image is written), and point `HUNGERSTRIKE_DATA_DIR` at a throwaway folder. These routes show a **SYNTHETIC TEST DATA** label.
+
+## Platforms
+
+A platform is listed as **supported** only after hosted CI has built and tested it there, with a link to the run. Anything less is labelled as such.
+
+| Platform | Status |
+| --- | --- |
+| Windows (x86_64, `windows-latest`) | **Supported.** Hosted CI built the workspace, passed `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` (117 passed, 0 failed), and built the release binary at `ab963dc`: [run 39197430196](https://github.com/Gerbzz/HungerStrike/actions/runs/39197430196). The headless capture is best-effort there and produced no image: the runner's only adapter, the WARP software D3D12 driver, removes the device (DXGI `0x887A0005`) within seconds of opening the 3D scene. Light and Dark app captures were made on one local Windows 11 PC instead. |
+| Linux (x86_64, `ubuntu-latest`) | **Supported** (CI only, not hands-on tested). Same clippy, 117 tests and release build passed at `ab963dc`: [run 39197430196](https://github.com/Gerbzz/HungerStrike/actions/runs/39197430196). The release app rendered Light and Dark synthetic captures under Xvfb with Mesa llvmpipe (Vulkan). |
+| macOS (arm64, `macos-latest`) | **Supported** (CI only, not hands-on tested). Same clippy, 117 tests and release build passed at `ab963dc`: [run 39197430196](https://github.com/Gerbzz/HungerStrike/actions/runs/39197430196). The release app rendered Light and Dark synthetic captures on the runner's paravirtual Metal device; the runner's small display limited the window to 1024x680. |
+| Android, iOS | Not claimed. See *Implemented vs planned*. |
+
+The [Cross-platform workflow](.github/workflows/cross-platform.yml) runs all of this on every pull request and uploads `hungerstrike-desktop-<os>` (release binary plus `assets/`) and `hungerstrike-screenshots-<os>` (captures and logs) as artifacts. "Supported" here means built and tested in hosted CI. Mouse and keyboard use, file dialogs and live theme switching have not been tested by hand on Linux or macOS, and only on one PC on Windows.
 
 ## Verification status
 
@@ -98,6 +130,12 @@ See [verification.md](verification.md) for the earlier dated record and [the Oct
 - **Current native capture:** [hosted Linux CI](https://github.com/Gerbzz/HungerStrike/actions/runs/39689376824) built the native app and produced the unmodified 1440 × 900 Kitchen/About image above. The geometric mark, app name and synthetic-data labels are visible. This is an automated capture, not an interactive acceptance test.
 - **Historical frames:** the [October 17 gallery](docs/CAPTURE_2026-10-17.md) records the earlier source checkpoint, including an OCR draft from a synthetic photo, reopening a saved profile, and recovery from a corrupted database file.
 - **Not verified:** native mouse/keyboard click-through, the file dialog and 3D picking on this build (the hosted capture does not establish those interactions); `cargo clippy` for the desktop crate (Windows Smart App Control blocked a build-time library, see verification.md); real receipts; other PCs, GPUs and DPI settings; screen readers.
+
+### Portability and safe migration candidate
+
+The earlier portability source `0ecd19e` passed the [three-OS build/test workflow](https://github.com/Gerbzz/HungerStrike/actions/runs/39252501361). It is now integrated with the geometric branding above and a reviewed SQLite migration repair; fresh checks on that combined source are required. Those prior results are not proof of the combined build. The [October 18 theme capture record](docs/CAPTURE_2026-10-18_THEMES.md) remains historical evidence, not current branding.
+
+Migration uses a consistent SQLite backup and atomic no-clobber publication, not independent copies of live WAL/journal files. Existing data remains in place. Missing legacy data permits a normal first start; unreadable, corrupt, locked or nonregular legacy paths and conflicting destination sidecars stop startup rather than silently opening an empty kitchen. Legacy symlinks require manual resolution. Atomicity protects the published database and cooperating app launches, not arbitrary unrelated sidecar writers. The nine migration regressions and all 87 core tests passed locally; native startup and the combined three-OS checks remain separate gates.
 
 ## Data and privacy
 

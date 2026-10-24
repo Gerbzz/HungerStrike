@@ -1,5 +1,29 @@
 # HungerStrike verification
 
+## 2026-10-18/19 · cross-platform (branch `hungerstrike-cross-platform`, PR #9)
+
+| Check | Result |
+| --- | --- |
+| Local (Windows 11) | Before Smart App Control blocked further local builds: `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` **117 passed, 0 failed** (78 core, 39 desktop incl. 4 new platform tests); release build rendered Light and Dark `selected` synthetic captures with `HUNGERSTRIKE_CAPTURE_EXIT=1` and no WARN/ERROR lines. After that, per the user's decision to keep SAC on, no further local builds were run; everything below is hosted CI. |
+| Cross-platform CI at `ab963dc` | [Run 39197430196](https://github.com/Gerbzz/HungerStrike/actions/runs/39197430196) **passed**: rustfmt (ubuntu) and, on each of `windows-latest`, `ubuntu-latest` and `macos-latest`, clippy `-D warnings`, `cargo test --workspace` (**117 passed, 0 failed** on each OS) and the release build. |
+| Linux capture | Release app under Xvfb on Mesa llvmpipe (Vulkan) wrote Light and Dark `selected` captures (artifact `hungerstrike-screenshots-ubuntu-latest`). Inspected: the full UI, the 3D fridge scene and DejaVu Sans text render correctly. The XDG portal was absent on the runner, so the theme fell back as designed. |
+| macOS capture | Release app on the runner's "Apple Paravirtual device" (Metal) wrote Light and Dark captures (artifact `hungerstrike-screenshots-macos-latest`). Inspected: correct rendering with Arial; the window was 1024x680 because of the runner's small display. |
+| Windows capture | **Not produced in CI.** The only adapter on `windows-latest` is the WARP software D3D12 driver ("Microsoft Basic Render Driver"); it removed the device (DXGI `0x887A0005`, "Parent device is lost") within seconds at 1440x900 ([run 39166680187](https://github.com/Gerbzz/HungerStrike/actions/runs/39166680187)) and at 1000x700 ([run 39194001090](https://github.com/Gerbzz/HungerStrike/actions/runs/39194001090)). The step is now labelled best-effort on Windows and reports a warning; it is required on Linux and macOS. |
+| Hosted Windows (existing workflow) | "Pantry recommendations" also passed at `ab963dc` ([run 39197430210](https://github.com/Gerbzz/HungerStrike/actions/runs/39197430210)). |
+| Not verified | Hands-on use on Linux and macOS (mouse, keyboard, file dialogs through the XDG portal or the macOS panel, live theme switching), the one-time copy of legacy `./HungerStrike` data on a real machine, and any Linux distribution other than the Ubuntu runner. |
+
+## 2026-10-18 · themes (`976a297`, `6da6e66`, `a9cedd3`)
+
+| Check | Result |
+| --- | --- |
+| Formatting | `cargo fmt --all --check` passed. |
+| Clippy | `cargo clippy --workspace --all-targets -- -D warnings` **passed** at `a9cedd3` (Smart App Control allowed it this time; seven older lints were fixed or annotated in `6da6e66`). |
+| Tests at `6da6e66` | `cargo test --workspace`: **113 passed, 0 failed** (core 78 incl. 2 new settings tests; desktop 35 incl. theme resolution, stored values, unchanged light colours, WCAG AA contrast of dark colours, scene room values, and an app test that switching applies immediately, persists across reopen and follows the OS for System). |
+| Tests at `a9cedd3` | Core 78 passed. The desktop test executable was **blocked by Smart App Control** ("An Application Control policy has blocked this file", os error 4551; Code Integrity event 3077). Not worked around; the PR's hosted CI run covers this commit. The change was a label string and a widget ID salt. |
+| Theme frames | Light and Dark frames of kitchen, receipt review, spending and Data from the `6da6e66` exe: [docs/CAPTURE_2026-10-18_THEMES.md](docs/CAPTURE_2026-10-18_THEMES.md). The light receipt-review and spending frames are byte-identical to the pre-theme `7222c4b` frames. |
+| System theme | The resolution logic is unit-tested; following a live Windows theme change was not exercised on screen. |
+
+
 ## 2026-10-17 · branch `hungerstrike-finish`
 
 Built on `main` at `fc5e8a2` with PR #3 and #4 (`6d0bf4b` … `535afd0`, merged as `030bf1b`) and PR #5 (`40bd235`, `09c4ec8`, merged as `a93ef58`). The `verification/hungerstrike-batch-capture-2026-10-16` branch adds only hosted-capture workflow probes on top of #3 and was not merged. `android-preview` (`df5b866`, 34 commits behind) restructures the desktop crate for an Android NativeActivity; it was inspected but not merged.

@@ -8,6 +8,7 @@ use hungerstrike_core::{
     ReplaceOrReconcile,
 };
 
+use crate::theme::t;
 use crate::{ocr, AppAction, AppState, MealFilter, ReceiptCommit, Tab};
 
 const INK: egui::Color32 = egui::Color32::from_rgb(36, 52, 54);
@@ -22,8 +23,8 @@ const BORDER: egui::Color32 = egui::Color32::from_rgb(217, 226, 222);
 /// White rounded panel used to group related controls.
 fn card<R>(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui) -> R) -> R {
     egui::Frame::default()
-        .fill(CARD)
-        .stroke(egui::Stroke::new(1.0_f32, BORDER))
+        .fill(t(CARD))
+        .stroke(egui::Stroke::new(1.0_f32, t(BORDER)))
         .corner_radius(10)
         .inner_margin(egui::Margin::same(16))
         .show(ui, |ui| {
@@ -72,7 +73,7 @@ fn brand_texture(ctx: &egui::Context, name: &str, png: &[u8]) -> Option<egui::Te
 
 fn launch_screen(ctx: &egui::Context, state: &AppState) {
     egui::CentralPanel::default()
-        .frame(egui::Frame::default().fill(egui::Color32::from_rgb(246, 248, 246)))
+        .frame(egui::Frame::default().fill(t(egui::Color32::from_rgb(246, 248, 246))))
         .show(ctx, |ui| {
             ui.add_space(((ui.available_height() - 240.0) / 2.0).max(0.0));
             ui.vertical_centered(|ui| {
@@ -86,7 +87,7 @@ fn launch_screen(ctx: &egui::Context, state: &AppState) {
                 ui.label(
                     RichText::new("CREATED BY")
                         .size(11.0)
-                        .color(egui::Color32::from_rgb(84, 103, 105)),
+                        .color(t(egui::Color32::from_rgb(84, 103, 105))),
                 );
                 if let Some(logo) = &state.pwds_logo {
                     ui.add(egui::Image::new((logo.id(), egui::vec2(80.0, 34.0))));
@@ -118,7 +119,7 @@ fn about_window(ctx: &egui::Context, state: &mut AppState) {
                 ui.label(
                     RichText::new("CREATED BY")
                         .size(11.0)
-                        .color(egui::Color32::from_rgb(84, 103, 105)),
+                        .color(t(egui::Color32::from_rgb(84, 103, 105))),
                 );
                 if let Some(logo) = &pwds_logo {
                     ui.add(egui::Image::new((logo.id(), egui::vec2(80.0, 34.0))));
@@ -128,6 +129,11 @@ fn about_window(ctx: &egui::Context, state: &mut AppState) {
                 ui.hyperlink_to("prowebdevsolutions.com", "https://prowebdevsolutions.com");
                 ui.add_space(8.0);
             });
+            ui.label(
+                RichText::new("Theme (Light, Dark or System) is under Data.")
+                    .size(12.0)
+                    .color(t(MUTED)),
+            );
             egui::CollapsingHeader::new("Credits and licenses")
                 .id_salt("about_credits")
                 .show(ui, |ui| {
@@ -142,7 +148,7 @@ fn about_window(ctx: &egui::Context, state: &mut AppState) {
                     ui.label(
                         RichText::new("Everything runs on this computer: no account, cloud service or paid API.")
                             .size(12.0)
-                            .color(MUTED),
+                            .color(t(MUTED)),
                     );
                 });
         });
@@ -156,7 +162,7 @@ fn parse_budget_dollars(input: &str) -> Option<i64> {
         .trim();
     let (dollars, cents) = text.split_once('.').unwrap_or((text, ""));
     let groups: Vec<_> = dollars.split(',').collect();
-    let grouped_correctly = groups[0].len() >= 1
+    let grouped_correctly = !groups[0].is_empty()
         && groups[0].len() <= 3
         && groups[0].bytes().all(|byte| byte.is_ascii_digit())
         && groups
@@ -186,7 +192,7 @@ fn parse_budget_dollars(input: &str) -> Option<i64> {
 fn status_badge(ui: &mut egui::Ui, message: &str) {
     if message.starts_with("SYNTHETIC TEST DATA") {
         egui::Frame::default()
-            .fill(egui::Color32::from_rgb(231, 243, 239))
+            .fill(t(egui::Color32::from_rgb(231, 243, 239)))
             .corner_radius(4)
             .inner_margin(egui::Margin::symmetric(8, 4))
             .show(ui, |ui| {
@@ -194,7 +200,7 @@ fn status_badge(ui: &mut egui::Ui, message: &str) {
                     RichText::new("SYNTHETIC TEST DATA")
                         .size(11.0)
                         .strong()
-                        .color(egui::Color32::from_rgb(17, 101, 93)),
+                        .color(t(egui::Color32::from_rgb(17, 101, 93))),
                 );
             });
     } else {
@@ -215,11 +221,11 @@ fn dashboard_row(ui: &mut egui::Ui, label: &str, value: String) {
 
 fn metric(ui: &mut egui::Ui, label: &str, value: String, color: egui::Color32) {
     egui::Frame::group(ui.style())
-        .fill(egui::Color32::WHITE)
+        .fill(t(egui::Color32::WHITE))
         .inner_margin(egui::Margin::symmetric(4, 5))
         .stroke(egui::Stroke::new(
             1.0_f32,
-            egui::Color32::from_rgb(218, 226, 225),
+            t(egui::Color32::from_rgb(218, 226, 225)),
         ))
         .show(ui, |ui| {
             ui.vertical(|ui| {
@@ -230,13 +236,57 @@ fn metric(ui: &mut egui::Ui, label: &str, value: String, color: egui::Color32) {
                 ui.label(
                     RichText::new(label)
                         .size(11.0)
-                        .color(egui::Color32::from_rgb(84, 103, 105)),
+                        .color(t(egui::Color32::from_rgb(84, 103, 105))),
                 );
             });
         });
 }
 
+/// egui visuals for the light (original) or dark theme. The light branch
+/// sets exactly the values HungerStrike has always used.
+fn theme_visuals(dark: bool) -> egui::Visuals {
+    crate::theme::set_dark(dark);
+    let mut visuals = if dark {
+        egui::Visuals::dark()
+    } else {
+        egui::Visuals::light()
+    };
+    visuals.panel_fill = t(egui::Color32::from_rgb(246, 248, 246));
+    visuals.window_fill = t(egui::Color32::WHITE);
+    // Text fields sit on a faint tint with a visible outline so they read
+    // as editable on cards.
+    visuals.extreme_bg_color = t(egui::Color32::from_rgb(244, 247, 246));
+    visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0_f32, t(BORDER));
+    // Hover and focus rings use the accent colour.
+    visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, t(ACCENT));
+    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.5_f32, t(ACCENT));
+    visuals.override_text_color = Some(t(egui::Color32::from_rgb(36, 52, 54)));
+    visuals.selection.bg_fill = crate::theme::accent_fill();
+    visuals.selection.stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
+    visuals.widgets.inactive.bg_fill = t(egui::Color32::from_rgb(232, 238, 236));
+    visuals.widgets.hovered.bg_fill = t(egui::Color32::from_rgb(216, 232, 228));
+    visuals.widgets.active.bg_fill = t(egui::Color32::from_rgb(18, 114, 110));
+    if dark {
+        visuals.widgets.inactive.weak_bg_fill = crate::theme::DARK_SURFACE_2;
+        visuals.widgets.hovered.weak_bg_fill = crate::theme::DARK_HOVER;
+        visuals.widgets.noninteractive.bg_stroke =
+            egui::Stroke::new(1.0_f32, crate::theme::DARK_BORDER);
+        visuals.widgets.noninteractive.bg_fill = crate::theme::DARK_SURFACE;
+        visuals.hyperlink_color = crate::theme::DARK_ACCENT;
+        visuals.faint_bg_color = crate::theme::DARK_PANEL;
+        visuals.text_cursor.stroke = egui::Stroke::new(2.0_f32, crate::theme::DARK_ACCENT);
+    }
+    visuals
+}
+
 pub fn draw(ctx: &egui::Context, state: &mut AppState) {
+    crate::theme::set_dark(state.dark);
+    if state.style_ready && state.applied_dark != Some(state.dark) {
+        let mut style = (*ctx.style()).clone();
+        style.visuals = theme_visuals(state.dark);
+        ctx.set_style(style);
+        state.applied_dark = Some(state.dark);
+    }
     if !state.style_ready {
         state.dormouse_logo = brand_texture(
             ctx,
@@ -248,17 +298,11 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
             "PWDS original mark",
             include_bytes!("../../assets/branding/PWDS-logo.png"),
         );
-        // Use the installed Windows UI face when present; retain egui's bundled
-        // fallback fonts on other platforms. No font bytes are redistributed.
-        let font_root = std::env::var_os("WINDIR")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows"))
-            .join("Fonts");
+        // Use an installed system UI face (Segoe UI on Windows, Arial on
+        // macOS, Noto Sans or DejaVu Sans on Linux) when present; egui's
+        // bundled fonts stay as the fallback. No font bytes are redistributed.
         let mut heading_family = egui::FontFamily::Proportional;
-        if let (Ok(regular), Ok(medium)) = (
-            std::fs::read(font_root.join("segoeui.ttf")),
-            std::fs::read(font_root.join("seguisb.ttf")),
-        ) {
+        if let Some((regular, medium)) = crate::platform::load_ui_fonts() {
             let mut fonts = egui::FontDefinitions::default();
             fonts.font_data.insert(
                 "System Sans".into(),
@@ -281,7 +325,6 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
             ctx.set_fonts(fonts);
         }
         let mut style = (*ctx.style()).clone();
-        style.visuals = egui::Visuals::light();
         style
             .text_styles
             .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
@@ -298,21 +341,9 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
             .insert(egui::TextStyle::Small, egui::FontId::proportional(13.0));
         style.spacing.item_spacing = egui::vec2(9.0, 10.0);
         style.spacing.button_padding = egui::vec2(12.0, 7.0);
-        style.visuals.panel_fill = egui::Color32::from_rgb(246, 248, 246);
-        style.visuals.window_fill = egui::Color32::WHITE;
-        // Text fields sit on a faint tint with a visible outline so they read
-        // as editable on white cards.
-        style.visuals.extreme_bg_color = egui::Color32::from_rgb(244, 247, 246);
-        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0_f32, BORDER);
-        style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, ACCENT);
-        style.visuals.widgets.active.bg_stroke = egui::Stroke::new(1.5_f32, ACCENT);
-        style.visuals.override_text_color = Some(egui::Color32::from_rgb(36, 52, 54));
-        style.visuals.selection.bg_fill = egui::Color32::from_rgb(17, 110, 107);
-        style.visuals.selection.stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
-        style.visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(232, 238, 236);
-        style.visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(216, 232, 228);
-        style.visuals.widgets.active.bg_fill = egui::Color32::from_rgb(18, 114, 110);
+        style.visuals = theme_visuals(state.dark);
         ctx.set_style(style);
+        state.applied_dark = Some(state.dark);
         state.style_ready = true;
         // Show the launch view while the font atlas is applied on the next pass.
         launch_screen(ctx, state);
@@ -334,8 +365,8 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
     egui::TopBottomPanel::top("header")
         .frame(
             egui::Frame::default()
-                .fill(egui::Color32::WHITE)
-                .stroke(egui::Stroke::new(1.0_f32, BORDER))
+                .fill(t(egui::Color32::WHITE))
+                .stroke(egui::Stroke::new(1.0_f32, t(BORDER)))
                 .inner_margin(egui::Margin::symmetric(16, 6)),
         )
         .show(ctx, |ui| {
@@ -361,11 +392,11 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                     text = if selected {
                         text.color(egui::Color32::WHITE).strong()
                     } else {
-                        text.color(INK)
+                        text.color(t(INK))
                     };
                     let button = egui::Button::new(text)
                         .fill(if selected {
-                            ACCENT
+                            crate::theme::accent_fill()
                         } else {
                             egui::Color32::TRANSPARENT
                         })
@@ -386,11 +417,11 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                     ui.label(
                         RichText::new("Stored on this computer only")
                             .size(12.0)
-                            .color(MUTED),
+                            .color(t(MUTED)),
                     );
                     if state.synthetic_banner {
                         egui::Frame::default()
-                            .fill(egui::Color32::from_rgb(255, 236, 214))
+                            .fill(t(egui::Color32::from_rgb(255, 236, 214)))
                             .corner_radius(4)
                             .inner_margin(egui::Margin::symmetric(8, 3))
                             .show(ui, |ui| {
@@ -398,7 +429,7 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                                     RichText::new("SYNTHETIC TEST DATA")
                                         .size(12.0)
                                         .strong()
-                                        .color(WARN),
+                                        .color(t(WARN)),
                                 );
                             });
                     }
@@ -413,7 +444,7 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
             .max_width(305.0)
             .frame(
                 egui::Frame::default()
-                    .fill(egui::Color32::from_rgb(248, 250, 249))
+                    .fill(t(egui::Color32::from_rgb(248, 250, 249)))
                     .inner_margin(egui::Margin::same(16)),
             )
             .show(ctx, |ui| {
@@ -431,7 +462,7 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
             .default_width(275.0)
             .frame(
                 egui::Frame::default()
-                    .fill(egui::Color32::from_rgb(248, 250, 249))
+                    .fill(t(egui::Color32::from_rgb(248, 250, 249)))
                     .inner_margin(egui::Margin::same(18)),
             )
             .show(ctx, |ui| {
@@ -443,7 +474,7 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
         egui::TopBottomPanel::bottom("scene_help")
             .frame(
                 egui::Frame::default()
-                    .fill(egui::Color32::from_rgb(235, 241, 239))
+                    .fill(t(egui::Color32::from_rgb(235, 241, 239)))
                     .inner_margin(egui::Margin::symmetric(15, 5)),
             )
             .show(ctx, |ui| {
@@ -467,13 +498,13 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
             .anchor(egui::Align2::LEFT_TOP, egui::vec2(312.0, 56.0))
             .show(ctx, |ui| {
                 egui::Frame::group(ui.style())
-                    .fill(egui::Color32::from_rgba_unmultiplied(255, 255, 255, 237))
+                    .fill(t(egui::Color32::from_rgba_unmultiplied(255, 255, 255, 237)))
                     .show(ui, |ui| {
                         ui.label(
                             RichText::new("KITCHEN  /  STORAGE VIEW")
                                 .size(11.0)
                                 .strong()
-                                .color(egui::Color32::from_rgb(24, 106, 101)),
+                                .color(t(egui::Color32::from_rgb(24, 106, 101))),
                         );
                         ui.label(
                             RichText::new(match state.zone.as_str() {
@@ -488,7 +519,7 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                         ui.label(
                             RichText::new("Illustrative forms; exact amounts in the list")
                                 .size(11.0)
-                                .color(egui::Color32::from_rgb(82, 101, 102)),
+                                .color(t(egui::Color32::from_rgb(82, 101, 102))),
                         );
                         if let Some(lot) = state.snapshot.lots.iter().find(|lot| {
                             lot.id == state.lot_id
@@ -513,7 +544,7 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                 .default_width(280.0)
                 .frame(
                     egui::Frame::default()
-                        .fill(egui::Color32::from_rgb(248, 250, 249))
+                        .fill(t(egui::Color32::from_rgb(248, 250, 249)))
                         .inner_margin(egui::Margin::same(18)),
                 )
                 .show(ctx, |ui| {
@@ -521,13 +552,13 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                         RichText::new("RECEIPT / REVIEW")
                             .size(11.0)
                             .strong()
-                            .color(egui::Color32::from_rgb(24, 106, 101)),
+                            .color(t(egui::Color32::from_rgb(24, 106, 101))),
                     );
                     ui.heading("Check before adding");
                     if let Some(draft) = &state.draft {
                         let ready = review(draft.clone()).is_ok();
                         egui::Frame::group(ui.style())
-                            .fill(egui::Color32::WHITE)
+                            .fill(t(egui::Color32::WHITE))
                             .show(ui, |ui| {
                                 ui.label(
                                     RichText::new(if ready {
@@ -538,9 +569,9 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                                     .size(18.0)
                                     .strong()
                                     .color(if ready {
-                                        egui::Color32::from_rgb(16, 112, 100)
+                                        t(egui::Color32::from_rgb(16, 112, 100))
                                     } else {
-                                        egui::Color32::from_rgb(160, 96, 30)
+                                        t(egui::Color32::from_rgb(160, 96, 30))
                                     }),
                                 );
                                 ui.label(format!("{} parsed purchase lines", draft.items.len()));
@@ -555,7 +586,7 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                             });
                         if state.source_match.is_some() {
                             ui.colored_label(
-                                egui::Color32::from_rgb(160, 96, 30),
+                                t(egui::Color32::from_rgb(160, 96, 30)),
                                 "Matching source exists. Review the duplicate warning.",
                             );
                         }
@@ -576,7 +607,7 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
                 .min_width(315.0)
                 .frame(
                     egui::Frame::default()
-                        .fill(egui::Color32::from_rgb(248, 250, 249))
+                        .fill(t(egui::Color32::from_rgb(248, 250, 249)))
                         .inner_margin(egui::Margin::same(18)),
                 )
                 .show(ctx, |ui| {
@@ -588,7 +619,7 @@ pub fn draw(ctx: &egui::Context, state: &mut AppState) {
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::default()
-                    .fill(egui::Color32::from_rgb(246, 248, 246))
+                    .fill(t(egui::Color32::from_rgb(246, 248, 246)))
                     .inner_margin(egui::Margin::same(26)),
             )
             .show(ctx, |ui| {
@@ -650,19 +681,19 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
             ui,
             "stock lots",
             stocked.to_string(),
-            egui::Color32::from_rgb(16, 112, 100),
+            t(egui::Color32::from_rgb(16, 112, 100)),
         );
         metric(
             ui,
             "use soon",
             soon.to_string(),
-            egui::Color32::from_rgb(160, 96, 30),
+            t(egui::Color32::from_rgb(160, 96, 30)),
         );
         metric(
             ui,
             "stock value",
             money(state.snapshot.remaining_food_cost_cents),
-            egui::Color32::from_rgb(45, 99, 135),
+            t(egui::Color32::from_rgb(45, 99, 135)),
         );
     });
     ui.add_space(10.0);
@@ -686,7 +717,7 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
                         RichText::new(label).color(if state.zone == zone {
                             egui::Color32::WHITE
                         } else {
-                            egui::Color32::from_rgb(39, 58, 59)
+                            t(egui::Color32::from_rgb(39, 58, 59))
                         }),
                     )
                     .clicked()
@@ -709,7 +740,7 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
     ui.label(
         RichText::new(format!("{} confirmed stock lot(s) shown", visible.len()))
             .size(12.0)
-            .color(egui::Color32::from_rgb(82, 101, 102)),
+            .color(t(egui::Color32::from_rgb(82, 101, 102))),
     );
     if visible.is_empty() {
         egui::Frame::group(ui.style()).show(ui, |ui| {
@@ -729,16 +760,16 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
         let row_width = ui.available_width();
         let row = egui::Frame::group(ui.style())
             .fill(if selected {
-                egui::Color32::from_rgb(231, 243, 239)
+                t(egui::Color32::from_rgb(231, 243, 239))
             } else {
-                egui::Color32::WHITE
+                t(egui::Color32::WHITE)
             })
             .stroke(egui::Stroke::new(
                 1.0_f32,
                 if selected {
-                    egui::Color32::from_rgb(17, 110, 107)
+                    t(egui::Color32::from_rgb(17, 110, 107))
                 } else {
-                    egui::Color32::from_rgb(217, 226, 222)
+                    t(egui::Color32::from_rgb(217, 226, 222))
                 },
             ))
             .inner_margin(egui::Margin::symmetric(8, 5))
@@ -763,13 +794,13 @@ fn kitchen(ui: &mut egui::Ui, state: &mut AppState) {
                         expiry_label(lot.expiry_date.as_deref(), lot.expiry_estimated)
                     ))
                     .size(12.0)
-                    .color(egui::Color32::from_rgb(82, 101, 102)),
+                    .color(t(egui::Color32::from_rgb(82, 101, 102))),
                 );
                 if expiry_before_planning_date(lot.expiry_date.as_deref(), &state.reference_date) {
                     ui.label(
                         RichText::new("Past planning date · excluded from meal suggestions")
                             .size(12.0)
-                            .color(egui::Color32::from_rgb(151, 77, 28)),
+                            .color(t(egui::Color32::from_rgb(151, 77, 28))),
                     );
                 }
             });
@@ -839,7 +870,7 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
         RichText::new("STOCK / DETAILS")
             .size(11.0)
             .strong()
-            .color(egui::Color32::from_rgb(24, 106, 101)),
+            .color(t(egui::Color32::from_rgb(24, 106, 101))),
     );
     ui.heading("Selected item");
     let selected = state
@@ -850,7 +881,7 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
         .cloned();
     if let Some(lot) = selected {
         egui::Frame::group(ui.style())
-            .fill(egui::Color32::WHITE)
+            .fill(t(egui::Color32::WHITE))
             .show(ui, |ui| {
                 ui.label(RichText::new(&lot.name).size(20.0).strong());
                 ui.label(format!("{} {}  •  {}", lot.quantity, lot.unit, lot.zone));
@@ -869,7 +900,7 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
                 ));
                 if expiry_before_planning_date(lot.expiry_date.as_deref(), &state.reference_date) {
                     ui.colored_label(
-                        egui::Color32::from_rgb(151, 77, 28),
+                        t(egui::Color32::from_rgb(151, 77, 28)),
                         "Past planning date. This lot is excluded from meal suggestions.",
                     );
                 }
@@ -918,7 +949,11 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
                 "Unknown. Receipts do not print expiry dates."
             })
             .size(12.0)
-            .color(if lot.expiry_estimated { WARN } else { MUTED }),
+            .color(if lot.expiry_estimated {
+                t(WARN)
+            } else {
+                t(MUTED)
+            }),
         );
         ui.horizontal_wrapped(|ui| {
             ui.add(
@@ -990,7 +1025,7 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
         }
     } else {
         egui::Frame::group(ui.style())
-            .fill(egui::Color32::WHITE)
+            .fill(t(egui::Color32::WHITE))
             .show(ui, |ui| {
                 ui.label(RichText::new("Nothing selected yet").strong());
                 ui.label("Select stock in the scene or left list.");
@@ -1025,7 +1060,7 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
                 ui.label(
                     RichText::new("Nothing dated within the next 3 days.")
                         .size(13.0)
-                        .color(MUTED),
+                        .color(t(MUTED)),
                 );
             }
             let mut select = None;
@@ -1048,7 +1083,7 @@ fn lot_inspector(ui: &mut egui::Ui, state: &mut AppState) {
             ui.label(
                 RichText::new("Dates are planning cues; check food condition before use.")
                     .size(12.0)
-                    .color(MUTED),
+                    .color(t(MUTED)),
             );
         });
 }
@@ -1126,7 +1161,7 @@ fn optional_money(ui: &mut egui::Ui, label: &str, value: &mut Option<i64>) {
         if let Some(amount) = value.as_mut() {
             money_field(ui, amount);
         } else {
-            ui.label(RichText::new("unknown").color(MUTED));
+            ui.label(RichText::new("unknown").color(t(MUTED)));
         }
     });
 }
@@ -1159,14 +1194,14 @@ fn draft_line(
 ) {
     let problems = crate::review_hints::line_problems(item);
     let border = if !problems.is_empty() {
-        WARN
+        t(WARN)
     } else if item.reviewed {
-        ACCENT
+        t(ACCENT)
     } else {
-        BORDER
+        t(BORDER)
     };
     egui::Frame::default()
-        .fill(if item.reviewed { ACCENT_SOFT } else { CARD })
+        .fill(if item.reviewed { t(ACCENT_SOFT) } else { t(CARD) })
         .stroke(egui::Stroke::new(1.0_f32, border))
         .corner_radius(8)
         .inner_margin(egui::Margin::symmetric(14, 10))
@@ -1175,7 +1210,7 @@ fn draft_line(
             ui.horizontal(|ui| {
                 ui.checkbox(&mut item.reviewed, "")
                     .on_hover_text("Tick after comparing this line with the receipt");
-                ui.label(RichText::new(format!("{}.", index + 1)).strong().color(MUTED));
+                ui.label(RichText::new(format!("{}.", index + 1)).strong().color(t(MUTED)));
                 ui.add(
                     egui::TextEdit::singleline(&mut item.name)
                         .desired_width((ui.available_width() - 210.0).max(140.0))
@@ -1197,7 +1232,7 @@ fn draft_line(
                             "Not checked"
                         })
                         .size(12.0)
-                        .color(if item.reviewed { ACCENT } else { MUTED }),
+                        .color(if item.reviewed { t(ACCENT) } else { t(MUTED) }),
                     );
                 });
             });
@@ -1206,7 +1241,7 @@ fn draft_line(
                     RichText::new(format!("Read from receipt:  {}", item.raw.trim()))
                         .monospace()
                         .size(12.0)
-                        .color(MUTED),
+                        .color(t(MUTED)),
                 );
             }
             ui.horizontal_wrapped(|ui| {
@@ -1267,10 +1302,10 @@ fn draft_line(
                 let (note, color) = match (&item.expiry_date, item.expiry_estimated) {
                     (Some(_), true) => (
                         "Estimated, not printed on the receipt. Edit to replace.",
-                        WARN,
+                        t(WARN),
                     ),
-                    (Some(_), false) => ("Entered by you", MUTED),
-                    (None, _) => ("Optional. Receipts do not print expiry dates.", MUTED),
+                    (Some(_), false) => ("Entered by you", t(MUTED)),
+                    (None, _) => ("Optional. Receipts do not print expiry dates.", t(MUTED)),
                 };
                 ui.label(RichText::new(note).size(12.0).color(color));
             });
@@ -1282,7 +1317,7 @@ fn draft_line(
                     .map(|flag| format!("scanner flagged: {flag}")),
             );
             if !notes.is_empty() {
-                ui.label(RichText::new(notes.join("  ·  ")).size(12.0).color(WARN));
+                ui.label(RichText::new(notes.join("  ·  ")).size(12.0).color(t(WARN)));
             }
         });
 }
@@ -1299,13 +1334,18 @@ fn run_estimate(state: &mut AppState, draft: &mut ReceiptDraft, index: Option<us
 }
 
 fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
-    ui.label(RichText::new("RECEIPT").size(11.0).strong().color(ACCENT));
+    ui.label(
+        RichText::new("RECEIPT")
+            .size(11.0)
+            .strong()
+            .color(t(ACCENT)),
+    );
     ui.heading("Add a receipt");
     ui.label(
         RichText::new(
             "Scan a photo or paste the text. Nothing is saved until you have checked every line.",
         )
-        .color(MUTED),
+        .color(t(MUTED)),
     );
     ui.add_space(8.0);
     card(ui, |ui| {
@@ -1314,7 +1354,7 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
             if ui
                 .add_enabled(
                     !running,
-                    egui::Button::new("Scan receipt photo…").fill(ACCENT_BUTTON),
+                    egui::Button::new("Scan receipt photo…").fill(t(ACCENT_BUTTON)),
                 )
                 .on_hover_text(format!(
                     "PNG or JPEG up to 8 MB, read on this computer with {}.",
@@ -1369,7 +1409,7 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
             }
             if running {
                 ui.add(egui::Spinner::new());
-                ui.label(RichText::new("Reading the photo on this computer…").color(MUTED));
+                ui.label(RichText::new("Reading the photo on this computer…").color(t(MUTED)));
             }
         });
         egui::CollapsingHeader::new("Receipt text")
@@ -1397,7 +1437,7 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
                 "Photos and receipt text stay on this computer. Only the reviewed lines are saved.",
             )
             .size(13.0)
-            .color(MUTED),
+            .color(t(MUTED)),
         );
         return;
     };
@@ -1430,7 +1470,7 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
                     ui.label(
                         RichText::new("Used for spending. It never sets an expiry date.")
                             .size(12.0)
-                            .color(MUTED),
+                            .color(t(MUTED)),
                     );
                 });
                 if draft.purchase_date != previous_date {
@@ -1444,7 +1484,7 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
         if let Some((id, date)) = &state.source_match {
             ui.add_space(4.0);
             ui.colored_label(
-                WARN,
+                t(WARN),
                 format!("This receipt matches one already saved as {id} on {date}. Confirming it again is recorded as a duplicate and changes nothing."),
             );
             ui.checkbox(
@@ -1459,14 +1499,19 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
     ui.horizontal(|ui| {
         ui.label(RichText::new("Items").strong().size(17.0));
         ui.label(
-            RichText::new(format!("{checked} of {total_lines} checked"))
-                .color(if checked == total_lines { ACCENT } else { WARN }),
+            RichText::new(format!("{checked} of {total_lines} checked")).color(
+                if checked == total_lines {
+                    t(ACCENT)
+                } else {
+                    t(WARN)
+                },
+            ),
         );
     });
     ui.label(
         RichText::new("Compare each line with the receipt, correct it, then tick it.")
             .size(13.0)
-            .color(MUTED),
+            .color(t(MUTED)),
     );
     let mut remove = None;
     let mut estimate = None;
@@ -1598,19 +1643,19 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
         ui.label(RichText::new("Confirm").strong().size(17.0));
         if ready {
             ui.colored_label(
-                ACCENT,
+                t(ACCENT),
                 "Everything reconciles and every line is checked. Confirming adds the food to your kitchen and the spending to your history.",
             );
         } else {
             for problem in &problems {
-                ui.colored_label(WARN, format!("• {problem}"));
+                ui.colored_label(t(WARN), format!("• {problem}"));
             }
             if !valid && problems.is_empty() {
-                ui.colored_label(WARN, "• Fix the lines marked in amber above.");
+                ui.colored_label(t(WARN), "• Fix the lines marked in amber above.");
             }
             if unchecked > 0 {
                 ui.colored_label(
-                    WARN,
+                    t(WARN),
                     format!("• Tick each line after checking it ({unchecked} left)."),
                 );
             }
@@ -1619,7 +1664,7 @@ fn receipt(ui: &mut egui::Ui, state: &mut AppState) {
             if ui
                 .add_enabled(
                     ready,
-                    egui::Button::new("Confirm receipt").fill(ACCENT_BUTTON),
+                    egui::Button::new("Confirm receipt").fill(t(ACCENT_BUTTON)),
                 )
                 .clicked()
             {
@@ -1814,13 +1859,13 @@ fn meal_card(ui: &mut egui::Ui, meal: &MealSuggestion, selected: bool, state: &m
         .unwrap_or_else(|| "unknown".into());
     egui::Frame::group(ui.style())
         .fill(if selected {
-            egui::Color32::from_rgb(231, 243, 239)
+            t(egui::Color32::from_rgb(231, 243, 239))
         } else {
-            egui::Color32::WHITE
+            t(egui::Color32::WHITE)
         })
         .stroke(egui::Stroke::new(
             1.0_f32,
-            egui::Color32::from_rgb(217, 226, 222),
+            t(egui::Color32::from_rgb(217, 226, 222)),
         ))
         .show(ui, |ui| {
             ui.set_min_width((ui.available_width() - 18.0).max(250.0));
@@ -1875,7 +1920,7 @@ fn meal_card(ui: &mut egui::Ui, meal: &MealSuggestion, selected: bool, state: &m
                 });
             } else if !meal.soon_expiring.is_empty() {
                 ui.colored_label(
-                    egui::Color32::from_rgb(160, 96, 30),
+                    t(egui::Color32::from_rgb(160, 96, 30)),
                     format!("Use soon: {}", meal.soon_expiring.join(", ")),
                 );
             }
@@ -1920,7 +1965,7 @@ fn meal_details(ui: &mut egui::Ui, state: &mut AppState) {
     }
     if !meal.soon_expiring.is_empty() {
         ui.colored_label(
-            egui::Color32::from_rgb(160, 96, 30),
+            t(egui::Color32::from_rgb(160, 96, 30)),
             format!("Use soon: {}", meal.soon_expiring.join(", ")),
         );
     }
@@ -2007,19 +2052,19 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
             ui,
             "cash flow",
             money(state.snapshot.cash_flow_cents),
-            egui::Color32::from_rgb(16, 112, 100),
+            t(egui::Color32::from_rgb(16, 112, 100)),
         );
         metric(
             ui,
             "food lines",
             money(state.snapshot.food_spending_cents),
-            egui::Color32::from_rgb(45, 99, 135),
+            t(egui::Color32::from_rgb(45, 99, 135)),
         );
         metric(
             ui,
             "discarded",
             money(state.snapshot.discarded_cost_cents),
-            egui::Color32::from_rgb(160, 96, 30),
+            t(egui::Color32::from_rgb(160, 96, 30)),
         );
     });
     if state.snapshot.receipt_count == 0 {
@@ -2046,12 +2091,12 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
     ui.add_space(4.0);
     ui.columns(2, |columns| {
         egui::Frame::group(columns[0].style())
-            .fill(egui::Color32::WHITE)
+            .fill(t(egui::Color32::WHITE))
             .corner_radius(8)
             .inner_margin(egui::Margin::same(8))
             .stroke(egui::Stroke::new(
                 1.0_f32,
-                egui::Color32::from_rgb(215, 225, 223),
+                t(egui::Color32::from_rgb(215, 225, 223)),
             ))
             .show(&mut columns[0], |ui| {
                 ui.spacing_mut().item_spacing.y = 3.0;
@@ -2061,7 +2106,7 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
                     RichText::new("PURCHASE ALLOCATION")
                         .size(11.0)
                         .strong()
-                        .color(egui::Color32::from_rgb(16, 112, 100)),
+                        .color(t(egui::Color32::from_rgb(16, 112, 100))),
                 );
                 ui.label(
                     RichText::new("Where receipt cash went")
@@ -2092,16 +2137,16 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
                         "Allocation of the cash flow above; these amounts are not added again.",
                     )
                     .size(13.0)
-                    .color(egui::Color32::from_rgb(91, 106, 106)),
+                    .color(t(egui::Color32::from_rgb(91, 106, 106))),
                 );
             });
         egui::Frame::group(columns[1].style())
-            .fill(egui::Color32::WHITE)
+            .fill(t(egui::Color32::WHITE))
             .corner_radius(8)
             .inner_margin(egui::Margin::same(8))
             .stroke(egui::Stroke::new(
                 1.0_f32,
-                egui::Color32::from_rgb(215, 225, 223),
+                t(egui::Color32::from_rgb(215, 225, 223)),
             ))
             .show(&mut columns[1], |ui| {
                 ui.spacing_mut().item_spacing.y = 3.0;
@@ -2111,7 +2156,7 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
                     RichText::new("STOCK COST EVENTS")
                         .size(11.0)
                         .strong()
-                        .color(egui::Color32::from_rgb(45, 99, 135)),
+                        .color(t(egui::Color32::from_rgb(45, 99, 135))),
                 );
                 ui.label(
                     RichText::new("After purchase")
@@ -2141,7 +2186,7 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
                             "Refund paid back; stock kept. Its quantity and remaining cost stay until used or discarded.",
                         )
                         .size(12.0)
-                        .color(egui::Color32::from_rgb(91, 106, 106)),
+                        .color(t(egui::Color32::from_rgb(91, 106, 106))),
                     );
                 }
                 ui.label(
@@ -2152,7 +2197,7 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
                         state.snapshot.unpriced_lot_count
                     ))
                     .size(12.0)
-                    .color(egui::Color32::from_rgb(91, 106, 106)),
+                    .color(t(egui::Color32::from_rgb(91, 106, 106))),
                 );
             });
     });
@@ -2162,7 +2207,7 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
         ui.label(
             RichText::new("Scroll for budget controls and full breakdown")
                 .size(12.0)
-                .color(egui::Color32::from_rgb(91, 106, 106)),
+                .color(t(egui::Color32::from_rgb(91, 106, 106))),
         );
     });
     ui.horizontal_wrapped(|ui| {
@@ -2205,10 +2250,10 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
         {
             let ui = &mut columns[index];
             egui::Frame::group(ui.style())
-                .fill(egui::Color32::WHITE)
+                .fill(t(egui::Color32::WHITE))
                 .corner_radius(8)
                 .inner_margin(egui::Margin::same(8))
-                .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(215, 225, 223)))
+                .stroke(egui::Stroke::new(1.0_f32, t(egui::Color32::from_rgb(215, 225, 223))))
                 .show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 4.0;
                     ui.set_min_width(ui.available_width() - 16.0);
@@ -2217,7 +2262,7 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
                         RichText::new(format!("{} PLAN", label.to_ascii_uppercase()))
                             .size(11.0)
                             .strong()
-                            .color(egui::Color32::from_rgb(16, 112, 100)),
+                            .color(t(egui::Color32::from_rgb(16, 112, 100))),
                     );
                     ui.label(RichText::new(format!("{label} budget")).text_style(egui::TextStyle::Heading).size(20.0));
                     let (budget_input, budget_text) = if matches!(period, Period::Week) {
@@ -2227,7 +2272,7 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
                     };
                     ui.horizontal(|ui| {
                         ui.label("Budget (USD)");
-                        ui.add_sized([112.0, 28.0], egui::TextEdit::singleline(budget_text).background_color(egui::Color32::from_rgb(241, 246, 244)));
+                        ui.add_sized([112.0, 28.0], egui::TextEdit::singleline(budget_text).background_color(t(egui::Color32::from_rgb(241, 246, 244))));
                         if ui.button("Save budget").clicked() {
                             match parse_budget_dollars(budget_text) {
                                 Some(cents) => {
@@ -2255,17 +2300,17 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
                         });
                     match result {
                         Ok(view) => {
-                            ui.label(RichText::new(format!("{} to {} · {} receipt(s)", view.start_date, view.end_date, view.receipt_count)).size(13.0).color(egui::Color32::from_rgb(91, 106, 106)));
+                            ui.label(RichText::new(format!("{} to {} · {} receipt(s)", view.start_date, view.end_date, view.receipt_count)).size(13.0).color(t(egui::Color32::from_rgb(91, 106, 106))));
                             if let Some(budget) = view.budget_cents.filter(|budget| *budget > 0) {
                                 let used = view.cash_flow_cents.max(0);
-                                ui.add(egui::ProgressBar::new((used as f32 / budget as f32).clamp(0.0, 1.0)).desired_width(ui.available_width()).fill(egui::Color32::from_rgb(23, 125, 112)));
+                                ui.add(egui::ProgressBar::new((used as f32 / budget as f32).clamp(0.0, 1.0)).desired_width(ui.available_width()).fill(t(egui::Color32::from_rgb(23, 125, 112))));
                                 ui.label(format!("{} of {} cash flow against budget", money(view.cash_flow_cents), money(budget)));
                             } else if view.budget_cents.is_none() {
                                 ui.label("Set a budget to see progress.");
                             }
                             dashboard_row(ui, "Remaining budget", view.remaining_budget_cents.map(money).unwrap_or_else(|| "not set".into()));
                             dashboard_row(ui, "Cash flow", money(view.cash_flow_cents));
-                            egui::CollapsingHeader::new("Full period breakdown")
+                            egui::CollapsingHeader::new("Full period breakdown").id_salt(("period_breakdown", label))
                                 .default_open(false)
                                 .show(ui, |ui| {
                                     dashboard_row(ui, "Food", money(view.food_spending_cents));
@@ -2285,8 +2330,57 @@ fn spending(ui: &mut egui::Ui, state: &mut AppState) {
     });
 }
 
+/// Light / Dark / System segmented control. Applies at once and is saved.
+fn theme_picker(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        let mut chosen = None;
+        for pref in crate::theme::ThemePref::ALL {
+            let selected = state.theme_pref == pref;
+            let text = RichText::new(pref.label());
+            let button = egui::Button::new(if selected {
+                text.color(egui::Color32::WHITE).strong()
+            } else {
+                text
+            })
+            .fill(if selected {
+                crate::theme::accent_fill()
+            } else {
+                t(egui::Color32::from_rgb(232, 238, 236))
+            })
+            .corner_radius(6)
+            .min_size(egui::vec2(76.0, 30.0));
+            let hint = match pref {
+                crate::theme::ThemePref::Light => "The original HungerStrike look (default)",
+                crate::theme::ThemePref::Dark => "Dark panels and an evening kitchen",
+                crate::theme::ThemePref::System => {
+                    "Follow the operating system's light or dark setting"
+                }
+            };
+            if ui.add(button).on_hover_text(hint).clicked() && !selected {
+                chosen = Some(pref);
+            }
+        }
+        if let Some(pref) = chosen {
+            if let Err(error) = state.dispatch(AppAction::SetTheme(pref)) {
+                state.message = error;
+            }
+        }
+    });
+}
+
 fn data(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Local data");
+    card(ui, |ui| {
+        ui.label(RichText::new("Theme").strong().size(17.0));
+        ui.label(
+            RichText::new("Light is the default. System follows your operating system's light or dark setting. Saved on this computer.")
+                .size(13.0)
+                .color(t(MUTED)),
+        );
+        theme_picker(ui, state);
+    });
+    ui.add_space(12.0);
     ui.label("A backup is a local JSON file. Review its preview before reconciling or replacing the current data.");
     if ui.button("Export backup").clicked() {
         if let Some(path) = rfd::FileDialog::new()
@@ -2384,7 +2478,7 @@ fn data(ui: &mut egui::Ui, state: &mut AppState) {
             ));
         }
     });
-    ui.label("Offline photo OCR requires a separately installed local Tesseract executable. Manual text entry always remains available.");
+    ui.label("Receipt photos are read on this computer by the bundled OCR engine. Typing or pasting receipt text always remains available.");
 }
 
 #[cfg(test)]
