@@ -21,6 +21,12 @@
 
 HungerStrike scans grocery receipts on your own computer, lets you check and correct every line, keeps track of what is in the fridge, freezer and pantry, puts the food that needs using first at the top, suggests recipes from what you have, builds a shopping list for what you are missing, and shows what you spend on food. Everything is stored locally in SQLite.
 
+## Rust direction and migration status
+
+- **Target:** Continue building HungerStrike as a Rust local-first kitchen application; its application core and desktop are already Rust, so this is extension and hardening rather than a new language rewrite.
+- **Current implementation:** Published `main` contains [`core/`](core/) for local pantry/receipt data and [`desktop/`](desktop/) for the Bevy/egui interface and offline OCR integration. SQLite storage and existing receipt-review safeguards remain part of the implementation.
+- **Remaining migration:** No wholesale application-language migration is required. Remaining work is feature completion and verification: representative receipt accuracy, native workflows and accessibility, durable data handling, and distribution. Bounded tests or synthetic captures are not full product acceptance.
+
 <p align="center"><img src="assets/screenshots/hungerstrike-about-geometric-e97d475-1440x900.png" alt="HungerStrike Kitchen and About panel with the geometric pantry mark and labelled synthetic stock" width="860"></p>
 <p align="center"><sub>Native Linux app capture of Kitchen and About, using synthetic data. Built from reviewed tree <code>94888d1</code>, merged in <code>6c1cf6d</code>. <a href="docs/CAPTURE_2026-10-21_GEOMETRIC.md">Capture source, checks and limits</a>.</sub></p>
 
